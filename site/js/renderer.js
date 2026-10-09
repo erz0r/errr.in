@@ -159,7 +159,7 @@ float bubble(vec2 p, vec4 r) {
 }
 float tailTaper(vec2 p, vec4 r) {
   if (uTail.w <= uTail.z) return 1.0;
-  return smoothstep(0.0, 8.0, uTail.y - p.y);
+  return smoothstep(0.0, 14.0, uTail.y - p.y);
 }
 float softEdge(float sd, float offset, float sigma) {
   return 0.5 * (1.0 - erf((sd - offset) * 0.70710678 / sigma));
@@ -215,7 +215,7 @@ void main() {
       float glow = uStackGlow, feather = uFeather, sd = 0.0;
       bool popup = uFade[i].w > 1.5;
       if (popup) {
-        feather = min(uFeather, 4.0);
+        feather = mix(10.0, min(uFeather, 4.0), tailTaper(p, r));
         sd = bubble(p, r);
         float clear = alpha[i] * softEdge(sd, uPortalReach, max(uPortalBlur, 0.5)) * tailTaper(p, r);
         g *= 1.0 - clear;
