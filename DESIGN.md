@@ -45,6 +45,9 @@ width: fit
 - `max-width`: with `width: fit`, the widest it gets (default 640).
 - `height`: in px. leave it out to fit the content.
 - `description`: writeups only. replaces `description.txt` for that page.
+- `popup: true`: the window opens as a small bubble on top of the window it was opened from,
+  just above the link, with a tail pointing at it. everything around it fades to the page
+  color. clicking outside or escape closes it.
 
 other things you can write:
 
@@ -58,6 +61,8 @@ other things you can write:
   current ones come from simple icons (cc0). any one-color svg works.
 - copy links: `[rukoaraba](copy:rukoaraba)` copies the text when clicked.
 - links to other sites open in a new tab.
+- message box: `{message-box}` is a text box with a send arrow. enter sends. the intro's
+  "you can tell me something" opens `content/windows/tell.md`, a popup with just this box.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last
   played and when. it updates every minute while the page is open. it needs a last.fm api
   key in a file called `lastfm.key` (git ignores it). without the key, nothing shows.
@@ -153,6 +158,11 @@ exposed directly and cloudflare handles https.
   folder out and a mount would keep pointing at the old one.
 - the tunnel config (`~/docker/cloudflared/config.yml`) sends `errr.in` and
   `www.errr.in` to `http://errrin:80`.
+- messages: a second container, `errrin-inbox` (`deploy/inbox.mjs`), saves each message to
+  `~/errr.in-inbox/messages.jsonl` and posts it to a discord webhook. the webhook lives in
+  `~/docker/errrin/inbox.env` on momoka, never in the repo. nginx allows about 3 messages a
+  minute per visitor. `npm run messages` shows them all.
+- cloudflare web analytics is allowed by the security policy, for visitor stats.
 - to deploy: `npm run deploy`. it builds, copies the
   site over ssh and swaps it in at once. the previous version stays in `site.old`.
 
