@@ -130,6 +130,8 @@ it.
   button.
 - presets at the top. load one to set every slider from it, and save writes back to the
   preset you loaded. type a new name to save a new one.
+- apply changes to all presets copies just the settings you changed since the last load
+  or save into every preset. it asks first and lists them.
 - a palette editor and a palette generator (an oklch ramp, or cubehelix after dave green).
 - test windows, and a performance test that reports to the dev server's terminal.
 - ctrl+s saves to `settings.json`.

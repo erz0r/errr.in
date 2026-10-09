@@ -9,6 +9,7 @@ document.head.append(css);
 
 let saved = await (await fetch('/__tune/settings')).json();
 let current = structuredClone(saved);
+let baseline = structuredClone(saved);
 let selected = current.palette[0];
 
 const settingsStyle = document.getElementById('settings');
@@ -187,9 +188,10 @@ function fileControls() {
     });
     if (!res.ok) { status.textContent = `save failed: ${await res.text()}`; status.className = 'lbl warn'; return; }
     saved = await res.json();
+    baseline = structuredClone(saved);
     refresh();
   };
-  revert.onclick = () => { current = structuredClone(saved); changed(); };
+  revert.onclick = () => { current = structuredClone(saved); baseline = structuredClone(saved); changed(); };
   compare.onpointerdown = () => apply(saved);
   compare.onpointerup = compare.onpointerleave = () => apply(current);
 
@@ -365,6 +367,7 @@ function presetControls() {
       const load = el('button', preset.name === loaded ? 'on' : '', 'load');
       load.onclick = () => {
         current = structuredClone(preset.settings);
+        baseline = structuredClone(preset.settings);
         loaded = name.value = preset.name;
         status.textContent = `loaded "${preset.name}". save writes back to it.`;
         changed();
@@ -394,13 +397,36 @@ function presetControls() {
     });
     if (!res.ok) return void (status.textContent = `save failed: ${await res.text()}`);
     loaded = name.value = target;
+    baseline = structuredClone(current);
     status.textContent = `saved "${target}"`;
+    show(await res.json());
+  };
+  const toAll = el('button', '', 'apply changes to all presets');
+  toAll.onclick = async () => {
+    const keys = Object.keys(current).filter((k) => JSON.stringify(current[k]) !== JSON.stringify(baseline[k]));
+    if (!keys.length) return void (status.textContent = 'nothing changed since the last load or save');
+    if (!presets.length) return void (status.textContent = 'there are no presets yet');
+    if (!confirm(`copy ${keys.join(', ')} into all ${presets.length} presets? their other settings stay as they are.`)) return;
+    let res;
+    for (const preset of presets) {
+      const settings = { ...preset.settings, ...Object.fromEntries(keys.map((k) => [k, structuredClone(current[k])])) };
+      res = await fetch('/__tune/presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: preset.name, settings }),
+      });
+      if (!res.ok) return void (status.textContent = `stopped at "${preset.name}": ${await res.text()}`);
+    }
+    baseline = structuredClone(current);
+    status.textContent = `updated ${keys.join(', ')} in all ${presets.length} presets`;
     show(await res.json());
   };
   fetch('/__tune/presets').then((r) => r.json()).then(show);
   const row = el('div', 'row');
   row.append(name, save);
-  return [row, list, status];
+  const allRow = el('div', 'row');
+  allRow.append(toAll);
+  return [row, list, allRow, status];
 }
 
 function generatorToggle(win) {
