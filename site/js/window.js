@@ -34,6 +34,8 @@
     const token = {};
     fades.set(win, token);
     win.dataset.fadeSeed = `${pattern},${to < from ? 1 : 0}`;
+    const drawsBox = win.querySelector('textarea');
+    if (drawsBox) win.dataset.fading = '';
     const start = performance.now() + (reducedMotion.matches ? 0 : delay);
     const duration = reducedMotion.matches ? 0 : fadeMs() * Math.abs(to - from);
     const frame = (now) => {
@@ -43,6 +45,7 @@
       win.style.opacity = String(from + (to - from) * t);
       if (t < 1) return requestAnimationFrame(frame);
       fades.delete(win);
+      if (drawsBox) delete win.dataset.fading;
       if (to === 1) win.style.removeProperty('opacity');
       done?.();
     };

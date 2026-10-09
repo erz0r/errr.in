@@ -451,6 +451,41 @@ void main() {
       ctx.fillText(marker, x, line.top + ascent);
     }
 
+    if (win.hasAttribute('data-fading')) {
+      for (const area of win.querySelectorAll('textarea')) {
+        const r = area.getBoundingClientRect(), cs = getComputedStyle(area);
+        const size = parseFloat(cs.fontSize), lineHeight = parseFloat(cs.lineHeight) || size * 1.6;
+        const [top, right, , left] = ['Top', 'Right', 'Bottom', 'Left'].map((side) => parseFloat(cs[`padding${side}`]));
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(r.left, r.top, r.width, r.height, parseFloat(cs.borderTopLeftRadius) || 0);
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.08)';
+        ctx.fill();
+        ctx.clip();
+        ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        ctx.fillStyle = area.value ? '#f00' : 'rgba(255, 0, 0, 0.45)';
+        const ascent = ctx.measureText('Hg').fontBoundingBoxAscent;
+        const width = r.width - left - right;
+        let y = r.top + top - area.scrollTop + (lineHeight - size) / 2;
+        for (const paragraph of (area.value || area.placeholder).split('\n')) {
+          let line = '';
+          for (const word of paragraph.split(' ')) {
+            const next = line ? `${line} ${word}` : word;
+            if (line && ctx.measureText(next).width > width) {
+              ctx.fillText(line, r.left + left, y + ascent);
+              y += lineHeight;
+              line = word;
+            } else {
+              line = next;
+            }
+          }
+          ctx.fillText(line, r.left + left, y + ascent);
+          y += lineHeight;
+        }
+        ctx.restore();
+      }
+    }
+
     for (const svg of win.querySelectorAll('svg.icon')) {
       const r = svg.getBoundingClientRect();
       if (!r.width) continue;
@@ -754,12 +789,12 @@ void main() {
       for (const node of record.removedNodes) if (node.classList?.contains('win') && !node.isConnected) forget(node);
       const el = record.target.nodeType === 1 ? record.target : record.target.parentElement;
       const win = el?.closest('.win');
-      if (win && !(record.type === 'attributes' && el === win)) forget(win);
+      if (win && (!(record.type === 'attributes' && el === win) || record.attributeName === 'data-fading')) forget(win);
     }
     render();
   }).observe(stage, {
     subtree: true, childList: true, characterData: true,
-    attributes: true, attributeFilter: ['style', 'hidden', 'class', 'src', 'data-map', 'data-tail'],
+    attributes: true, attributeFilter: ['style', 'hidden', 'class', 'src', 'data-map', 'data-tail', 'data-fading'],
   });
   stage.addEventListener('scroll', (e) => {
     const win = e.target.closest?.('.win');
