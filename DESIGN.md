@@ -10,7 +10,8 @@ npm install
 npm run dev              # http://localhost:5173, add ?tune for the tuning panel
 npm run dev -- --lan     # also reachable from a phone on the same network
 npm run build            # writes the site to dist/
-npm run preview          # remakes site/media/preview.png (needs the dev server running)
+npm run preview          # draws the link preview image, a big circle in the lavender
+                         # preset (or: npm run preview -- <preset name>)
 npm run deploy           # builds and puts the site on momoka
 ```
 
