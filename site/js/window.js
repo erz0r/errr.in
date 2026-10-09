@@ -97,7 +97,7 @@
     const box = stageBox(), line = anchor.getClientRects()[0], w = win.offsetWidth, h = win.offsetHeight;
     const content = win.querySelector('.txt')?.firstElementChild;
     const inset = content ? content.getBoundingClientRect().left - win.getBoundingClientRect().left : 0;
-    const tail = 32, tip = line.top - box.top + 10;
+    const tail = 38, tip = line.top - box.top + 16;
     const x = Math.max(MARGIN, Math.min(line.left - box.left - inset, box.width - w - MARGIN));
     const y = Math.max(MARGIN, Math.min(tip - tail - h, box.height - h - MARGIN));
     moveTo(win, x, y);
