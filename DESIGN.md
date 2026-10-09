@@ -11,7 +11,7 @@ npm run dev              # http://localhost:5173, add ?tune for the tuning panel
 npm run dev -- --lan     # also reachable from a phone on the same network
 npm run build            # writes the site to dist/
 npm run preview          # remakes site/media/preview.png (needs the dev server running)
-npm run deploy -- user@host:/var/www/errr/site
+npm run deploy           # builds and puts the site on momoka
 ```
 
 the dev server only accepts saves from the computer it runs on. it writes `settings.json`
@@ -135,21 +135,19 @@ it.
 
 ## deploying
 
-`deploy/errr.in.conf` is an nginx config. it redirects http and www to https://errr.in,
-serves `404.html` for missing pages, compresses text files, and caches `/media/` for a
-week.
+the site runs on momoka, a home server, behind its cloudflare tunnel. nothing is
+exposed directly and cloudflare handles https.
 
-one-time setup on the ubuntu server, with dns for errr.in and www.errr.in pointing at it:
-
-1. `sudo apt install nginx certbot python3-certbot-nginx`
-2. `sudo certbot certonly --nginx -d errr.in -d www.errr.in`
-3. `sudo mkdir -p /var/www/errr && sudo chown $USER /var/www/errr`
-4. copy `deploy/errr.in.conf` to `/etc/nginx/sites-available/errr.in`, link it into
-   `sites-enabled/`, remove `sites-enabled/default`, and run
-   `sudo nginx -t && sudo systemctl reload nginx`.
-
-after that, `npm run deploy -- user@host:/var/www/errr/site` builds the site, copies it
-over ssh, and swaps it in all at once. the previous version is kept in `site.old`.
+- `deploy/nginx.conf` is the config for an `nginx:alpine` container called `errrin`.
+  it serves `~/errr.in/site`, shows `404.html` for missing pages, compresses text files,
+  and caches `/media/` for a week.
+- `deploy/compose.yml` is that container's entry in `~/docker/docker-compose.yml`. it
+  mounts `~/errr.in` rather than `~/errr.in/site`, because each deploy swaps the `site`
+  folder out and a mount would keep pointing at the old one.
+- the tunnel config (`~/docker/cloudflared/config.yml`) sends `errr.in` and
+  `www.errr.in` to `http://errrin:80`.
+- to deploy: `npm run deploy`. it builds, copies the
+  site over ssh and swaps it in at once. the previous version stays in `site.old`.
 
 ## performance
 

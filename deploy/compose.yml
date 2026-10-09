@@ -1,0 +1,7 @@
+  errrin:
+    image: nginx:alpine
+    container_name: errrin
+    volumes:
+      - ~/errr.in:/usr/share/nginx/html:ro
+      - ~/docker/errrin/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped

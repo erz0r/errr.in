@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 
-const target = process.argv[2] ?? process.env.DEPLOY;
+const target = process.argv[2] ?? process.env.DEPLOY ?? 'momoka:/home/erin/errr.in/site';
 const match = target?.match(/^([^:\s]+):(\/[\w./-]+[\w-])$/);
 if (!match) {
-  console.error('Usage: npm run deploy -- user@host:/absolute/folder, e.g. erin@errr.in:/var/www/errr/site');
+  console.error('usage: npm run deploy -- host:/absolute/folder');
   process.exit(1);
 }
 const [, host, dir] = match;
