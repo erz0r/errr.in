@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <!-- PLACEHOLDER image (the prototype's stand-in sunset) -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a1f4f"/>
+      <stop offset="0.45" stop-color="#c2405a"/>
+      <stop offset="0.68" stop-color="#f39a4a"/>
+      <stop offset="0.69" stop-color="#2b1a12"/>
+      <stop offset="1" stop-color="#120c08"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="600" cy="504" r="270" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd27a"/>
+      <stop offset="0.42" stop-color="#f08a3c"/>
+      <stop offset="1" stop-color="#f08a3c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="700" fill="url(#sky)"/>
+  <rect width="1200" height="700" fill="url(#sun)"/>
+</svg>

@@ -1,0 +1,48 @@
+.tune-win {
+  position: fixed;
+  top: 12px;
+  z-index: 2147483647;
+  width: 300px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  background: rgb(15 15 15 / 0.94);
+  border: 1px solid rgb(110 110 128 / 0.5);
+  color: #e6e6e6;
+  font: 12px/1.35 ui-monospace, Consolas, "SF Mono", monospace;
+  user-select: none;
+}
+#tune { right: 12px; }
+#tune-gen { right: 324px; }
+.tune-hidden .tune-win { display: none; }
+
+.tune-win[hidden], .tune-win [hidden] { display: none !important; }
+.tune-win .title { padding: 3px 6px; background: #294a7a; cursor: move; }
+.tune-win .body { display: grid; gap: 4px; padding: 4px 6px 8px; }
+.tune-win .hdr { margin-top: 2px; padding: 2px 4px; background: rgb(66 150 250 / 0.31); cursor: pointer; }
+.tune-win .hdr:hover { background: rgb(66 150 250 / 0.8); }
+.tune-win .section { display: grid; gap: 4px; }
+.tune-win .row { display: flex; align-items: center; gap: 6px; }
+.tune-win .lbl { flex: 1; white-space: nowrap; }
+.tune-win .hint { color: #808080; }
+.tune-win .warn { color: #ff6b6b; }
+.tune-win .dirty { color: #f2c94c; }
+
+.tune-win .slider { position: relative; flex: 0 0 180px; height: 18px; background: rgb(41 74 122 / 0.54); cursor: ew-resize; }
+.tune-win .slider:hover { background: rgb(66 150 250 / 0.4); }
+.tune-win .slider:focus-visible, .tune-win .mark:focus-visible { outline: 1px solid #4296fa; }
+.tune-win .fill { position: absolute; inset: 0 auto 0 0; background: rgb(66 150 250 / 0.55); }
+.tune-win .val { position: relative; display: block; text-align: center; line-height: 18px; }
+
+.tune-win button { padding: 2px 8px; border: 0; background: rgb(66 150 250 / 0.4); color: inherit; font: inherit; cursor: pointer; }
+.tune-win button:hover { background: #4296fa; }
+.tune-win button:active, .tune-win button.on { background: #0f87fa; }
+.tune-win input[type="color"] { flex: 0 0 40px; height: 18px; padding: 0; border: 0; background: none; cursor: pointer; }
+.tune-win input[type="checkbox"] { margin: 0; accent-color: #4296fa; }
+.tune-win input[type="text"] { flex: 1; min-width: 0; padding: 2px 6px; border: 0; background: rgb(41 74 122 / 0.54); color: inherit; font: inherit; }
+.tune-win .mini-strip { flex: 0 0 48px; height: 12px; border: 1px solid #555; }
+
+.tune-win .strip { height: 20px; border: 1px solid #555; cursor: copy; }
+.tune-win .marks { position: relative; height: 14px; margin: 0 1px; }
+.tune-win .mark { position: absolute; top: 0; width: 10px; height: 14px; margin-left: -5px; border: 1px solid #999; cursor: ew-resize; touch-action: none; }
+.tune-win .mark.sel { border-color: #fff; box-shadow: 0 0 0 1px #4296fa; }
+.tune-win pre { margin: 0; font: inherit; white-space: pre-wrap; }

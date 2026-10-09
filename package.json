@@ -1,0 +1,17 @@
+{
+  "name": "errr-in",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev/server.js",
+    "build": "node dev/build.js",
+    "bench": "node dev/bench.js",
+    "preview": "node dev/preview.js",
+    "deploy": "node dev/build.js && node dev/deploy.js"
+  },
+  "devDependencies": {
+    "marked": "^18.1.0",
+    "marked-footnote": "^1.4.0",
+    "puppeteer-core": "^25.13.0"
+  }
+}
