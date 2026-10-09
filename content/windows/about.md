@@ -10,9 +10,13 @@ my friends call me erin[^erin]! the main thread that pulls my life together is p
 
 i like drawing, graphic design, intuitive user interfaces[^int]:
 
-[{icon:x} twitter](https://x.com/erinbeess) · [{icon:lastdotfm} last.fm](https://www.last.fm/user/erarnard) · [{icon:huggingface} huggingface](https://huggingface.co/errrinn) · [{icon:github} github](https://github.com/erz0r) · [{icon:discord} rukoaraba](copy:rukoaraba)
+***
 
 {lastfm:erarnard}
+
+***
+
+[{icon:x} twitter](https://x.com/erinbeess) · [{icon:lastdotfm} last.fm](https://www.last.fm/user/erarnard) · [{icon:huggingface} huggingface](https://huggingface.co/errrinn) · [{icon:github} github](https://github.com/erz0r) · [{icon:discord} rukoaraba](copy:rukoaraba)
 
 [^erin]: probably because that's my name. weird
 
