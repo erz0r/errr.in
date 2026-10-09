@@ -152,17 +152,29 @@ float bubbleBody(vec2 p, vec4 r) {
   vec2 hb = (r.zw - r.xy) * 0.5;
   return sdRoundBox(p - (r.xy + r.zw) * 0.5, hb, min(12.0, min(hb.x, hb.y)));
 }
-float bubble(vec2 p, vec4 r) {
-  float body = bubbleBody(p, r);
-  if (uTail.w <= uTail.z) return body;
-  return smin(body, sdTriangle(p, vec2(uTail.z, r.w - 6.0), vec2(uTail.w, r.w - 6.0), uTail.xy), 5.0);
+float tailShape(vec2 p, vec4 r) {
+  if (uTail.w <= uTail.z) return 1e5;
+  return sdTriangle(p, vec2(uTail.z, r.w - 6.0), vec2(uTail.w, r.w - 6.0), uTail.xy);
 }
-float tailTaper(vec2 p, vec4 r, float from, float to) {
+float bubble(vec2 p, vec4 r) {
+  return smin(bubbleBody(p, r), tailShape(p, r), 5.0);
+}
+float tailFade(vec2 p, float from, float to) {
   if (uTail.w <= uTail.z) return 1.0;
   return smoothstep(from, to, uTail.y - p.y);
 }
+float tailTaper(vec2 p, vec4 r, float from, float to) {
+  if (uTail.w <= uTail.z) return 1.0;
+  float dx = max(min(uTail.x, uTail.z) - p.x, max(p.x - uTail.w, 0.0));
+  float column = 1.0 - smoothstep(0.0, 12.0, dx);
+  return mix(1.0, tailFade(p, from, to), column);
+}
 float softEdge(float sd, float offset, float sigma) {
   return 0.5 * (1.0 - erf((sd - offset) * 0.70710678 / sigma));
+}
+float bubbleEdge(vec2 p, vec4 r, float offset, float sigma) {
+  return max(softEdge(bubbleBody(p, r), offset, sigma) * tailTaper(p, r, 8.0, 44.0),
+             softEdge(tailShape(p, r), offset, sigma) * tailFade(p, 8.0, 44.0));
 }
 
 float hash(vec2 q) { return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
@@ -197,7 +209,7 @@ void main() {
     if (i < uCount && p.x > r.x - reach && p.x < r.z + reach && p.y > r.y - reach && p.y < r.w + reach) {
       if (uFade[i].w > 1.5) {
         float hs = min(s, 8.0);
-        halo[i] = alpha[i] * uHaloGlow * softEdge(bubble(p, r), 0.6 * hs, hs) * tailTaper(p, r, 8.0, 26.0);
+        halo[i] = alpha[i] * uHaloGlow * bubbleEdge(p, r, 0.6 * hs, hs);
       } else {
         halo[i] = alpha[i] * uHaloGlow * roundedBlur(r.xy - e, r.zw + e, p, s, 24.0);
       }
@@ -215,9 +227,9 @@ void main() {
       float glow = uStackGlow, feather = uFeather, sd = 0.0;
       bool popup = uFade[i].w > 1.5;
       if (popup) {
-        feather = mix(10.0, min(uFeather, 4.0), tailTaper(p, r, 8.0, 26.0));
+        feather = mix(20.0, min(uFeather, 4.0), tailTaper(p, r, 8.0, 44.0));
         sd = bubble(p, r);
-        float clear = alpha[i] * softEdge(sd, uPortalReach, max(uPortalBlur, 0.5)) * tailTaper(p, r, 8.0, 26.0);
+        float clear = alpha[i] * bubbleEdge(p, r, uPortalReach, max(uPortalBlur, 0.5));
         g *= 1.0 - clear;
         ink *= 1.0 - clear;
         glow = 1.0;
@@ -227,7 +239,7 @@ void main() {
       float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
       if (popup ? sd < 0.0 : inRect > 0.5) {
         t *= inRect; ts *= inRect; m *= inRect; ms *= inRect;
-        float tip = popup ? tailTaper(p, r, 0.0, 24.0) : 1.0;
+        float tip = popup ? tailTaper(p, r, 0.0, 36.0) : 1.0;
         float fade = (popup ? clamp(-sd / max(feather, 0.5), 0.0, 1.0) * tip : cssFade(d.x, size.x, feather) * cssFade(d.y, size.y, feather)) * alpha[i];
         float cover = popup ? 1.0 : blurSpan(p.x, r.x, r.z, uBlur) * blurSpan(p.y, r.y, r.w, uBlur);
         float soft = cover * uBg + dot(ms.rgb, GRAY) - ms.a * uBg + ts.r * (uInk - uBg);
