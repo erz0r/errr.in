@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { Marked } from 'marked';
@@ -54,7 +56,10 @@ const newTabs = (html) => html.replace(/<a href="(https?:\/\/[^"]*)"/g, '<a href
 
 const siteDescription = () => readFile(join(CONTENT, 'description.txt'), 'utf8').then((t) => t.trim(), () => '');
 
+const versioned = (path) => `${path}?v=${createHash('sha256').update(readFileSync(join(SITE, path))).digest('hex').slice(0, 8)}`;
+
 const withHead = (html, { title, description, url }) => html
+  .replaceAll('https://errr.in/media/preview.png"', `https://errr.in${versioned('/media/preview.png')}"`)
   .replaceAll('<!-- content:title -->', escape(title))
   .replaceAll('<!-- content:og-title -->', escape(title))
   .replaceAll('<!-- content:description -->', escape(description))
