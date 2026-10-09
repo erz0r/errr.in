@@ -15,7 +15,7 @@ npm run deploy -- user@host:/var/www/errr/site
 ```
 
 the dev server only accepts saves from the computer it runs on. it writes `settings.json`
-and `palettes/*.json` and nothing else.
+and `presets/*.json` and nothing else.
 
 ## content
 
@@ -79,11 +79,13 @@ in a 256-color ramp made from the palette.
 an svg filter version came first. it ran at 3 to 22 fps on an iphone, and the webgl
 version holds 60 fps.
 
-### palettes
+### presets and palettes
 
-- `settings.json` holds every tunable value, including the default palette.
-- each file in `palettes/` is a preset. every visit picks one at random before anything
-  is drawn. with `?tune`, the page uses the `settings.json` palette instead.
+- `settings.json` holds every tunable value: effects, palette, window colors, ripple,
+  fades and layout. it is the default.
+- each file in `presets/` is a full copy of those settings. every visit picks one at
+  random before anything is drawn. with `?tune`, or with no presets, the page uses
+  `settings.json` instead.
 - text has to reach a minimum contrast against the window (`minContrast`, 4.5:1 by
   default). if the chosen text color doesn't, the nearest palette color that does is
   used. if no palette color does, a darker or lighter shade of the window color is used.
@@ -121,8 +123,9 @@ it.
 
 - sliders for the effects, fades, layout, ripple and text contrast, plus a randomize
   button.
-- a palette editor, a palette generator (an oklch ramp, or cubehelix after dave green),
-  and saving, loading and deleting presets.
+- presets at the top. load one to set every slider from it, and save writes back to the
+  preset you loaded. type a new name to save a new one.
+- a palette editor and a palette generator (an oklch ramp, or cubehelix after dave green).
 - test windows, and a performance test that reports to the dev server's terminal.
 - ctrl+s saves to `settings.json`.
 

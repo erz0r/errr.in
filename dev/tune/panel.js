@@ -1,4 +1,4 @@
-import { contrast, cssVars, hexToRgb, inkColor, inkGray, luminance, paletteVars, rampAt, rampHex, rgbToHex, sortedStops } from './settings.js';
+import { contrast, cssVars, hexToRgb, inkColor, inkGray, luminance, rampAt, rampHex, rgbToHex, sortedStops } from './settings.js';
 import { GENERATORS, defaultParams, generatePalette } from './generator.js';
 import { makeTestWindow, runPerfTest } from './test-windows.js';
 
@@ -17,7 +17,6 @@ const stage = document.querySelector('.stage');
 function apply(s) {
   settingsStyle.textContent = cssVars(s);
   const root = document.documentElement;
-  for (const name of Object.keys(paletteVars(s))) root.style.removeProperty(name);
   root.dataset.ramp = rampHex(s.palette);
   dispatchEvent(new Event('tune:apply'));
 }
@@ -346,39 +345,59 @@ function layoutPicker() {
 }
 
 function presetControls() {
+  const cleanName = (n) => n.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
   const name = el('input');
   name.type = 'text';
   name.placeholder = 'preset name';
-  const save = el('button', '', 'save as preset');
-  const status = el('div', 'hint', 'the site shows one of these at random each visit (not while tuning)');
+  const save = el('button', '', 'save preset');
+  const status = el('div', 'hint', 'a preset is every setting. each visit picks one at random (not while tuning). ctrl+s saves settings.json, the default.');
   const list = el('div', 'section');
+  let presets = [];
+  let loaded = null;
   const strip = (palette) => {
     const s = el('div', 'mini-strip');
     s.style.background = `linear-gradient(to right, ${sortedStops(palette).map((p) => `${p.color} ${p.pos * 100}%`).join(', ')})`;
     return s;
   };
-  const show = (presets) => list.replaceChildren(...presets.map((preset) => {
-    const load = el('button', '', 'load');
-    load.onclick = () => { current.palette = structuredClone(preset.palette); changed(); };
-    const remove = el('button', '', 'delete');
-    remove.onclick = async () => {
-      if (!confirm(`Delete the preset "${preset.name}"?`)) return;
-      const res = await fetch(`/__tune/palettes/${encodeURIComponent(preset.name)}`, { method: 'DELETE' });
-      if (res.ok) show(await res.json()); else status.textContent = `delete failed: ${await res.text()}`;
-    };
-    const row = el('div', 'row');
-    row.append(strip(preset.palette), el('span', 'lbl', preset.name), load, remove);
-    return row;
-  }));
+  const show = (next) => {
+    presets = next;
+    list.replaceChildren(...presets.map((preset) => {
+      const load = el('button', preset.name === loaded ? 'on' : '', 'load');
+      load.onclick = () => {
+        current = structuredClone(preset.settings);
+        loaded = name.value = preset.name;
+        status.textContent = `loaded "${preset.name}". save writes back to it.`;
+        changed();
+        show(presets);
+      };
+      const remove = el('button', '', 'delete');
+      remove.onclick = async () => {
+        if (!confirm(`delete the preset "${preset.name}"?`)) return;
+        const res = await fetch(`/__tune/presets/${encodeURIComponent(preset.name)}`, { method: 'DELETE' });
+        if (!res.ok) return void (status.textContent = `delete failed: ${await res.text()}`);
+        if (loaded === preset.name) loaded = null;
+        show(await res.json());
+      };
+      const row = el('div', 'row');
+      row.append(strip(preset.settings.palette), el('span', 'lbl', preset.name), load, remove);
+      return row;
+    }));
+  };
   save.onclick = async () => {
-    const res = await fetch('/__tune/palettes', {
+    const target = cleanName(name.value);
+    if (!target) return void (status.textContent = 'type a name first');
+    if (target !== loaded && presets.some((p) => p.name === target) && !confirm(`replace the preset "${target}"?`)) return;
+    const res = await fetch('/__tune/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.value, palette: current.palette }),
+      body: JSON.stringify({ name: target, settings: current }),
     });
-    if (res.ok) { show(await res.json()); name.value = ''; } else status.textContent = `save failed: ${await res.text()}`;
+    if (!res.ok) return void (status.textContent = `save failed: ${await res.text()}`);
+    loaded = name.value = target;
+    status.textContent = `saved "${target}"`;
+    show(await res.json());
   };
-  fetch('/__tune/palettes').then((r) => r.json()).then(show);
+  fetch('/__tune/presets').then((r) => r.json()).then(show);
   const row = el('div', 'row');
   row.append(name, save);
   return [row, list, status];
@@ -394,6 +413,7 @@ function generatorToggle(win) {
 
 const genWin = generatorWindow();
 floatingWindow('tune', 'tune   ` to hide', [
+  ...section('presets', ...presetControls()),
   ...section('effect',
     effectSlider('feather', 'feather', 0, 120, 1, 'px'),
     effectSlider('edge blur', 'edgeBlur', 0, 40, 0.5, 'px'),
@@ -404,7 +424,6 @@ floatingWindow('tune', 'tune   ` to hide', [
     mapToggle(),
   ),
   ...section('palette', ...paletteEditor(), generatorToggle(genWin), contrastReadout()),
-  ...section('palette presets', ...presetControls()),
   ...section('window',
     slider('text overlay', () => current, 'textOverlay', 0, 1, 0.01),
     slider('min text contrast', () => current, 'minContrast', 1, 12, 0.1, ':1'),

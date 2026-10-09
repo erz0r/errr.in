@@ -1,0 +1,28 @@
+{
+  "feather": 67,
+  "edgeBlur": 2.5,
+  "haloSize": 22,
+  "haloGlow": 0.38,
+  "stackGlow": 0.88,
+  "textOverlay": 1,
+  "liquidRefract": 60,
+  "liquidLight": 0.02,
+  "liquidDamping": 0.953,
+  "liquidClick": 1.95,
+  "liquidSize": 11,
+  "fadeMs": 550,
+  "fadeSpread": 0.58,
+  "fadeScale": 210,
+  "minContrast": 4.5,
+  "windowPush": 1,
+  "windowLayout": "swap",
+  "palette": [
+    { "pos": 0, "color": "#0d1d0c" },
+    { "pos": 0.2, "color": "#23344b" },
+    { "pos": 0.4, "color": "#703a56" },
+    { "pos": 0.6, "color": "#6d723d" },
+    { "pos": 0.8, "color": "#5f9b95" },
+    { "pos": 1, "color": "#b798cc" }
+  ],
+  "window": { "bg": "#6e6860", "ink": "#f6f1e8" }
+}

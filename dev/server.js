@@ -4,9 +4,9 @@ import { networkInterfaces } from 'node:os';
 import { extname, resolve, sep } from 'node:path';
 import { renderRoute } from './content.js';
 import { ICONS } from './icon.js';
-import { deletePalette, loadPalettes, savePalette } from './palettes.js';
+import { deletePreset, loadPresets, savePreset } from './presets.js';
 import { renderPage } from './render.js';
-import { validate } from './tune/settings.js';
+import { formatSettings, validate } from './tune/settings.js';
 
 const PORT = Number(process.env.PORT ?? 5173);
 const LAN = process.argv.includes('--lan');
@@ -54,29 +54,26 @@ createServer(async (req, res) => {
       if (req.method === 'POST') {
         if (!isLoopback(req)) return send(403, 'saving only works from this computer');
         const settings = validate(await readJson(req, url));
-        const json = JSON.stringify(settings, null, 2)
-          .replace(/\{\s+("pos": [^,]+),\s+("color": "[^"]+")\s+\}/g, '{ $1, $2 }')
-          .replace(/\{\s+("bg": "[^"]+"),\s+("ink": "[^"]+")\s+\}/, '{ $1, $2 }');
-        await writeFile(SETTINGS, json + '\n');
+        await writeFile(SETTINGS, formatSettings(settings));
         return send(200, JSON.stringify(settings), TYPES['.json']);
       }
       return send(405);
     }
 
-    if (url.pathname === '/__tune/palettes' || url.pathname.startsWith('/__tune/palettes/')) {
+    if (url.pathname === '/__tune/presets' || url.pathname.startsWith('/__tune/presets/')) {
       if (req.method !== 'GET') {
         if (!isLoopback(req)) return send(403, 'saving only works from this computer');
-        if (req.method === 'POST' && url.pathname === '/__tune/palettes') {
-          const { name, palette } = await readJson(req, url);
-          await savePalette(name, palette);
+        if (req.method === 'POST' && url.pathname === '/__tune/presets') {
+          const { name, settings } = await readJson(req, url);
+          await savePreset(name, settings);
         } else if (req.method === 'DELETE') {
           if (req.headers.origin && req.headers.origin !== url.origin) return send(403, 'wrong origin');
-          await deletePalette(decodeURIComponent(url.pathname.slice('/__tune/palettes/'.length)));
+          await deletePreset(decodeURIComponent(url.pathname.slice('/__tune/presets/'.length)));
         } else {
           return send(405);
         }
       }
-      return send(200, JSON.stringify(await loadPalettes()), TYPES['.json']);
+      return send(200, JSON.stringify(await loadPresets()), TYPES['.json']);
     }
 
     if (url.pathname === '/__tune/log' && req.method === 'POST') {
@@ -87,7 +84,7 @@ createServer(async (req, res) => {
 
     const tune = url.searchParams.has('tune');
     const page = await renderRoute(url.pathname);
-    const render = async (html) => renderPage(html, await loadSettings(), { tune, palettes: await loadPalettes() });
+    const render = async (html) => renderPage(html, await loadSettings(), { tune, presets: await loadPresets() });
     if (page) return send(200, await render(page), TYPES['.html']);
     if (ICONS[url.pathname]) return send(200, ICONS[url.pathname]((await loadSettings()).palette), TYPES['.png']);
     if (url.pathname === '/writeup.html') return send(404, 'not found');

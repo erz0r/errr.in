@@ -149,3 +149,7 @@ export function validate(s) {
   out.window = { bg: s.window.bg.toLowerCase(), ink: s.window.ink.toLowerCase() };
   return out;
 }
+
+export const formatSettings = (s) => JSON.stringify(validate(s), null, 2)
+  .replace(/\{\s+("pos": [^,]+),\s+("color": "[^"]+")\s+\}/g, '{ $1, $2 }')
+  .replace(/\{\s+("bg": "[^"]+"),\s+("ink": "[^"]+")\s+\}/, '{ $1, $2 }') + '\n';
