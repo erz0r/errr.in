@@ -57,6 +57,10 @@ other things you can write:
   current ones come from simple icons (cc0). any one-color svg works.
 - copy links: `[rukoaraba](copy:rukoaraba)` copies the text when clicked.
 - links to other sites open in a new tab.
+- last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last
+  played and when. it updates every minute while the page is open. it needs a last.fm api
+  key in a file called `lastfm.key` (git ignores it). without the key, nothing shows.
+  the key ends up in the page, which is normal for read-only last.fm keys.
 
 ## how it works
 
