@@ -11,6 +11,7 @@
     user: "1000:1000"
     command: ["node", "/app/inbox.mjs"]
     read_only: true
+    env_file: errrin/inbox.env
     volumes:
       - ~/docker/errrin/inbox.mjs:/app/inbox.mjs:ro
       - ~/errr.in-inbox:/data
