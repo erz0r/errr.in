@@ -406,7 +406,7 @@ void main() {
       ctx.restore();
     }
 
-    for (const svg of win.querySelectorAll('button svg, svg.stroke')) {
+    for (const svg of win.querySelectorAll('button svg')) {
       const r = svg.getBoundingClientRect();
       if (!r.width) continue;
       const k = r.width / svg.viewBox.baseVal.width;
@@ -414,7 +414,6 @@ void main() {
       ctx.translate(r.left, r.top);
       ctx.scale(k, k);
       ctx.lineWidth = parseFloat(getComputedStyle(svg).strokeWidth) || 1.5;
-      ctx.lineCap = getComputedStyle(svg).strokeLinecap;
       for (const path of svg.querySelectorAll('path')) ctx.stroke(new Path2D(path.getAttribute('d')));
       ctx.restore();
     }

@@ -57,8 +57,6 @@ other things you can write:
   current ones come from simple icons (cc0). any one-color svg works.
 - copy links: `[rukoaraba](copy:rukoaraba)` copies the text when clicked.
 - links to other sites open in a new tab.
-- dividers: `***` on its own line, with blank lines around it, draws a short line in
-  the middle.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last
   played and when. it updates every minute while the page is open. it needs a last.fm api
   key in a file called `lastfm.key` (git ignores it). without the key, nothing shows.
