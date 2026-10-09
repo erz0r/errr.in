@@ -77,6 +77,7 @@ uniform vec4 uArea[MAX];
 uniform float uAlpha[MAX];
 uniform vec4 uFade[MAX];
 uniform float uSpread, uNoiseScale, uPortalReach, uPortalBlur;
+uniform vec4 uTail;
 uniform int uCount;
 uniform float uFeather, uBlur, uHaloSize, uHaloGlow, uStackGlow, uOverlay;
 uniform float uBg, uInk, uMapOn;
@@ -127,6 +128,39 @@ float roundedBlur(vec2 lo, vec2 hi, vec2 p, float s, float corner) {
   return v;
 }
 
+float sdRoundBox(vec2 p, vec2 b, float r) {
+  vec2 q = abs(p) - b + r;
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+float sdTriangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
+  vec2 e0 = p1 - p0, e1 = p2 - p1, e2 = p0 - p2;
+  vec2 v0 = p - p0, v1 = p - p1, v2 = p - p2;
+  vec2 q0 = v0 - e0 * clamp(dot(v0, e0) / dot(e0, e0), 0.0, 1.0);
+  vec2 q1 = v1 - e1 * clamp(dot(v1, e1) / dot(e1, e1), 0.0, 1.0);
+  vec2 q2 = v2 - e2 * clamp(dot(v2, e2) / dot(e2, e2), 0.0, 1.0);
+  float k = sign(e0.x * e2.y - e0.y * e2.x);
+  vec2 d = min(min(vec2(dot(q0, q0), k * (v0.x * e0.y - v0.y * e0.x)),
+                   vec2(dot(q1, q1), k * (v1.x * e1.y - v1.y * e1.x))),
+                   vec2(dot(q2, q2), k * (v2.x * e2.y - v2.y * e2.x)));
+  return -sqrt(d.x) * sign(d.y);
+}
+float smin(float a, float b, float k) {
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
+}
+float bubbleBody(vec2 p, vec4 r) {
+  vec2 hb = (r.zw - r.xy) * 0.5;
+  return sdRoundBox(p - (r.xy + r.zw) * 0.5, hb, min(12.0, min(hb.x, hb.y)));
+}
+float bubble(vec2 p, vec4 r) {
+  float body = bubbleBody(p, r);
+  if (uTail.w <= uTail.z) return body;
+  return smin(body, sdTriangle(p, vec2(uTail.z, r.w - 6.0), vec2(uTail.w, r.w - 6.0), uTail.xy), 5.0);
+}
+float softEdge(float sd, float offset, float sigma) {
+  return 0.5 * (1.0 - erf((sd - offset) * 0.70710678 / sigma));
+}
+
 float hash(vec2 q) { return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 q) {
   vec2 i = floor(q), f = fract(q), u = f * f * (3.0 - 2.0 * f);
@@ -157,12 +191,12 @@ void main() {
     vec4 r = uRect[i];
     alpha[i] = i < uCount ? fadeAt(uAlpha[i], p, r, uFade[i]) : 0.0;
     if (i < uCount && p.x > r.x - reach && p.x < r.z + reach && p.y > r.y - reach && p.y < r.w + reach) {
-      float he = e, hs = s;
       if (uFade[i].w > 1.5) {
-        hs = min(s, 8.0);
-        he = 0.6 * hs;
+        float hs = min(s, 8.0);
+        halo[i] = alpha[i] * uHaloGlow * softEdge(bubble(p, r), 0.6 * hs, hs);
+      } else {
+        halo[i] = alpha[i] * uHaloGlow * roundedBlur(r.xy - e, r.zw + e, p, s, 24.0);
       }
-      halo[i] = alpha[i] * uHaloGlow * roundedBlur(r.xy - he, r.zw + he, p, hs, 24.0);
       g += (1.0 - g) * halo[i];
     }
   }
@@ -174,23 +208,27 @@ void main() {
     vec4 t = texture2D(uText, uv), ts = texture2D(uTextSoft, uv);
     vec4 m = texture2D(uMedia, uv), ms = texture2D(uMediaSoft, uv);
     if (i < uCount) {
-      float glow = uStackGlow, feather = uFeather;
-      if (uFade[i].w > 1.5) {
-        feather = min(uFeather, 0.25 * min(size.x, size.y));
-        float clear = alpha[i] * roundedBlur(r.xy - uPortalReach, r.zw + uPortalReach, p, max(uPortalBlur, 0.5), 12.0 + uPortalReach);
+      float glow = uStackGlow, feather = uFeather, sd = 0.0;
+      bool popup = uFade[i].w > 1.5;
+      if (popup) {
+        feather = min(uFeather, 4.0);
+        sd = bubble(p, r);
+        float clear = alpha[i] * softEdge(sd, uPortalReach, max(uPortalBlur, 0.5));
         g *= 1.0 - clear;
         ink *= 1.0 - clear;
         glow = 1.0;
       }
       g += (1.0 - g) * halo[i] * glow;
       ink *= 1.0 - halo[i] * glow;
-      if (d.x >= 0.0 && d.y >= 0.0 && d.x <= size.x && d.y <= size.y) {
-        float fade = cssFade(d.x, size.x, feather) * cssFade(d.y, size.y, feather) * alpha[i];
-        float cover = blurSpan(p.x, r.x, r.z, uBlur) * blurSpan(p.y, r.y, r.w, uBlur);
+      float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
+      if (popup ? sd < 0.0 : inRect > 0.5) {
+        t *= inRect; ts *= inRect; m *= inRect; ms *= inRect;
+        float fade = (popup ? clamp(-sd / max(feather, 0.5), 0.0, 1.0) : cssFade(d.x, size.x, feather) * cssFade(d.y, size.y, feather)) * alpha[i];
+        float cover = popup ? 1.0 : blurSpan(p.x, r.x, r.z, uBlur) * blurSpan(p.y, r.y, r.w, uBlur);
         float soft = cover * uBg + dot(ms.rgb, GRAY) - ms.a * uBg + ts.r * (uInk - uBg);
         g = g * (1.0 - cover * fade) + soft * fade;
         ink *= 1.0 - cover * fade;
-        float sharp = cssFade(d.x, size.x, 2.0 * feather) * cssFade(d.y, size.y, 2.0 * feather) * alpha[i];
+        float sharp = (popup ? clamp(-sd / max(2.0 * feather, 0.5), 0.0, 1.0) : cssFade(d.x, size.x, 2.0 * feather) * cssFade(d.y, size.y, 2.0 * feather)) * alpha[i];
         float content = uBg * (1.0 - m.a) + dot(m.rgb, GRAY);
         content = mix(content, uInk, t.r);
         g = mix(g, content, sharp);
@@ -209,7 +247,7 @@ void main() {
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
   const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5 };
 
   let gl = null;
@@ -640,7 +678,7 @@ void main() {
     gl.viewport(0, 0, w, h);
 
     const rects = new Float32Array(main.capacity * 4), areas = new Float32Array(main.capacity * 4);
-    const alphas = new Float32Array(main.capacity), patterns = new Float32Array(main.capacity * 4);
+    const alphas = new Float32Array(main.capacity), patterns = new Float32Array(main.capacity * 4), tail = new Float32Array(4);
     drawn.forEach((win, i) => {
       const r = win.getBoundingClientRect();
       if (isColumn(win)) {
@@ -652,7 +690,11 @@ void main() {
       areas.set(atlas.areas.get(win) ?? [0, 0, 0, 0], i * 4);
       alphas[i] = win.style.opacity === '' ? 1 : Number(win.style.opacity);
       if (win.dataset.fadeSeed) patterns.set(win.dataset.fadeSeed.split(',').map(Number), i * 4);
-      if (win.hasAttribute('data-popup')) patterns[i * 4 + 3] += 2;
+      if (win.hasAttribute('data-popup')) {
+        patterns[i * 4 + 3] += 2;
+        const [tx, ty, b0, b1] = (win.dataset.tail ?? '').split(',').map(Number);
+        if (b1 > b0) tail.set([rects[i * 4] + tx, rects[i * 4 + 1] + ty, rects[i * 4] + b0, rects[i * 4] + b1]);
+      }
     });
 
     gl.useProgram(main.program);
@@ -675,6 +717,7 @@ void main() {
     gl.uniform1f(u.uNoiseScale, settings.noiseScale);
     gl.uniform1f(u.uPortalReach, settings.portalReach);
     gl.uniform1f(u.uPortalBlur, settings.portalBlur);
+    gl.uniform4fv(u.uTail, tail);
     gl.uniform1i(u.uCount, drawn.length);
     gl.uniform1f(u.uFeather, settings.feather);
     gl.uniform1f(u.uBlur, settings.blur);
@@ -711,7 +754,7 @@ void main() {
     render();
   }).observe(stage, {
     subtree: true, childList: true, characterData: true,
-    attributes: true, attributeFilter: ['style', 'hidden', 'class', 'src', 'data-map'],
+    attributes: true, attributeFilter: ['style', 'hidden', 'class', 'src', 'data-map', 'data-tail'],
   });
   stage.addEventListener('scroll', (e) => {
     const win = e.target.closest?.('.win');

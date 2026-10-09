@@ -94,9 +94,12 @@
     const box = stageBox(), line = anchor.getClientRects()[0], w = win.offsetWidth, h = win.offsetHeight;
     const content = win.querySelector('.txt')?.firstElementChild;
     const inset = content ? content.getBoundingClientRect().left - win.getBoundingClientRect().left : 0;
-    const gap = cssNumber('--portal-reach') + 2 * cssNumber('--portal-blur') + 6;
-    const x = line.left - box.left - inset, y = line.top - box.top - h - gap;
-    moveTo(win, Math.max(MARGIN, Math.min(x, box.width - w - MARGIN)), Math.max(MARGIN, Math.min(y, box.height - h - MARGIN)));
+    const tail = 12, gap = tail + cssNumber('--portal-reach') + 2 * cssNumber('--portal-blur') + 4;
+    const x = Math.max(MARGIN, Math.min(line.left - box.left - inset, box.width - w - MARGIN));
+    const y = Math.max(MARGIN, Math.min(line.top - box.top - h - gap, box.height - h - MARGIN));
+    moveTo(win, x, y);
+    const tipX = line.left - box.left + 4 - x;
+    win.dataset.tail = y + h + gap <= line.top - box.top + 1 ? [tipX, h + tail, tipX + 3, tipX + 21].map((v) => v.toFixed(1)).join(',') : '';
   }
 
   addEventListener('tune:apply', () => visibleWindows().filter((w) => w.hasAttribute('data-popup')).forEach(placePopup));
