@@ -49,9 +49,11 @@
     requestAnimationFrame(frame);
   }
 
-  function open(win, opener = topmost(), { back = false } = {}) {
+  function open(win, opener = topmost(), { back = false, anchor = null } = {}) {
+    const popup = win.hasAttribute('data-popup');
+    if (popup) anchors.set(win, anchor);
     let wait = 0, pattern;
-    if (swapping()) {
+    if (swapping() && !popup) {
       for (const other of visibleWindows()) if (other !== win && !closing.has(other)) hide(other);
       const leaving = visibleWindows().find((other) => other !== win && closing.has(other));
       if (leaving) {
@@ -64,24 +66,55 @@
       if (wasHidden && !back && opener && opener !== win) {
         openers.set(win, opener);
         const button = win.querySelector('.back');
-        if (button) button.hidden = false;
+        if (button && !popup) button.hidden = false;
       }
       closing.delete(win);
       win.hidden = false;
       if (wasHidden) {
         win.style.opacity = '0';
-        if (settling() || swapping()) startInMiddle(win);
+        if (popup) placePopup(win);
+        else if (settling() || swapping()) startInMiddle(win);
         else placeOffset(win, opener);
       }
       fade(win, 1, null, wait, pattern);
     }
-    if (settling()) focusWindow(win);
+    if (settling() && !popup) focusWindow(win);
     else stage.append(win);
     const i = opened.indexOf(win);
     if (i >= 0) opened.splice(i, 1);
     opened.push(win);
-    win.focus({ preventScroll: true });
+    (win.querySelector('[autofocus]') ?? win).focus({ preventScroll: true });
     showTitle();
+  }
+
+  const anchors = new Map();
+  function placePopup(win) {
+    const anchor = anchors.get(win);
+    if (!anchor?.isConnected) return startInMiddle(win);
+    const box = stageBox(), line = anchor.getClientRects()[0], w = win.offsetWidth, h = win.offsetHeight;
+    const content = win.querySelector('.txt')?.firstElementChild;
+    const inset = content ? content.getBoundingClientRect().left - win.getBoundingClientRect().left : 0;
+    const gap = cssNumber('--portal-reach') + 2 * cssNumber('--portal-blur') + 6;
+    const x = line.left - box.left - inset, y = line.top - box.top - h - gap;
+    moveTo(win, Math.max(MARGIN, Math.min(x, box.width - w - MARGIN)), Math.max(MARGIN, Math.min(y, box.height - h - MARGIN)));
+  }
+
+  addEventListener('tune:apply', () => visibleWindows().filter((w) => w.hasAttribute('data-popup')).forEach(placePopup));
+
+  const openPopup = () => visibleWindows().find((w) => w.hasAttribute('data-popup') && !closing.has(w));
+
+  function remember(win) {
+    const hash = startWindows.includes(win) ? '' : `#${win.dataset.window}`;
+    if (location.hash !== hash) history.pushState(null, '', hash || location.pathname + location.search);
+  }
+
+  function closePopup(popup) {
+    const to = openers.get(popup) ?? startWindows[0];
+    hide(popup);
+    if (to && to !== popup) {
+      open(to, popup, { back: true });
+      remember(to);
+    }
   }
 
   function showTitle() {
@@ -147,9 +180,10 @@
   document.addEventListener('click', (e) => {
     const back = e.target.closest('.back');
     const from = back?.closest('.win'), to = from && openers.get(from);
+    if (from?.hasAttribute('data-popup')) return closePopup(from);
     if (to) {
       open(to, from, { back: true });
-      if (fromHash() !== to) history.pushState(null, '', `#${to.dataset.window}`);
+      remember(to);
       return;
     }
     const link = e.target.closest('a[href^="#"]');
@@ -160,8 +194,8 @@
     }
     if (win) {
       e.preventDefault();
-      open(win, link.closest('.win'));
-      if (fromHash() !== win) history.pushState(null, '', `#${win.dataset.window}`);
+      open(win, link.closest('.win'), { anchor: link });
+      remember(win);
       return;
     }
     const clicked = e.target.closest('.stage > .win:not([data-shape])');
@@ -171,6 +205,18 @@
     if (settling()) focusWindow(clicked);
     else if (!swapping() && clicked !== topmost()) stage.append(clicked);
     showTitle();
+  });
+
+  document.addEventListener('click', (e) => {
+    const popup = openPopup();
+    if (!popup || popup.contains(e.target) || !stage.contains(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closePopup(popup);
+  }, true);
+  addEventListener('keydown', (e) => {
+    const popup = e.key === 'Escape' && openPopup();
+    if (popup) closePopup(popup);
   });
 
   addEventListener('popstate', () => {
@@ -271,7 +317,7 @@
 
   function plan() {
     const box = stageBox(), pad = clearance(), gap = 2 * pad;
-    const wins = visibleWindows().filter((w) => !closing.has(w));
+    const wins = visibleWindows().filter((w) => !closing.has(w) && !w.hasAttribute('data-popup'));
     targets.clear();
     if (!wins.length) return;
     const a = pickAnchor(wins);
@@ -346,7 +392,7 @@
   }
 
   function step(dt) {
-    const wins = visibleWindows().filter((w) => !closing.has(w));
+    const wins = visibleWindows().filter((w) => !closing.has(w) && !w.hasAttribute('data-popup'));
     if (!settling() || !wins.length) return false;
     const box = stageBox();
     if (layoutKey(wins, box) !== planned) plan();
@@ -375,7 +421,8 @@
   }
 
   const sizes = new ResizeObserver(() => {
-    if (swapping()) visibleWindows().filter((w) => !closing.has(w)).forEach(startInMiddle);
+    if (swapping()) visibleWindows().filter((w) => !closing.has(w) && !w.hasAttribute('data-popup')).forEach(startInMiddle);
+    visibleWindows().filter((w) => w.hasAttribute('data-popup')).forEach(placePopup);
     wake();
   });
   sizes.observe(stage);

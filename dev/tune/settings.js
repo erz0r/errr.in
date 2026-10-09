@@ -91,6 +91,8 @@ export function cssVars(s) {
   --fade-ms: ${s.fadeMs};
   --fade-spread: ${s.fadeSpread};
   --fade-scale: ${s.fadeScale};
+  --portal-reach: ${s.portalReach};
+  --portal-blur: ${s.portalBlur};
   --window-layout: ${s.windowLayout};
   --bg-gray: ${+bg.toFixed(4)};
 ${palette}
@@ -112,6 +114,8 @@ const RANGES = {
   fadeMs: [0, 2000, 400],
   fadeSpread: [0, 0.95, 0.6],
   fadeScale: [40, 1000, 320],
+  portalReach: [0, 120, 18],
+  portalBlur: [0, 40, 4],
   minContrast: [1, 12, 4.5],
   windowPush: [0, 2, 1],
 };

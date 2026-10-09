@@ -443,6 +443,8 @@ floatingWindow('tune', 'tune   ` to hide', [
     slider('fade time', () => current, 'fadeMs', 0, 2000, 10, 'ms'),
     slider('fade spread', () => current, 'fadeSpread', 0, 0.95, 0.01),
     slider('fade scale', () => current, 'fadeScale', 40, 1000, 10, 'px'),
+    slider('popup fade reach', () => current, 'portalReach', 0, 120, 1, 'px'),
+    slider('popup fade blur', () => current, 'portalBlur', 0, 40, 0.5, 'px'),
     slider('spacing', () => current, 'windowPush', 0, 2, 0.05),
     el('div', 'hint', 'swap: one window at a time · pack: around the focused one (spacing 1 = glows just clear) · stack: offset'),
   ),
@@ -452,7 +454,7 @@ floatingWindow('tune', 'tune   ` to hide', [
 ]);
 
 addEventListener('keydown', (e) => {
-  if (e.key === '`' && !e.target.closest?.('input')) document.body.classList.toggle('tune-hidden');
+  if (e.key === '`' && !e.target.closest?.('input, textarea')) document.body.classList.toggle('tune-hidden');
 });
 
 refresh();

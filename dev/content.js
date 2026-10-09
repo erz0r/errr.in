@@ -52,6 +52,13 @@ async function withLastfm(html) {
     .replace(/\{lastfm:([\w-]+)\}/g, (_, user) => (key ? `<span ${attrs(user)}></span>` : ''));
 }
 
+const MESSAGE_BOX = '<form class="message-box" novalidate><div class="message-row">'
+  + '<textarea name="message" rows="1" maxlength="2000" placeholder="anything.." aria-label="your message" autofocus></textarea>'
+  + '<button type="submit" aria-label="send"><svg viewBox="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5"/></svg></button>'
+  + '</div><input class="trap" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">'
+  + '<p class="message-status" role="status"></p></form>';
+const withMessageBox = (html) => html.replace(/<p>\{message-box\}<\/p>|\{message-box\}/g, MESSAGE_BOX);
+
 const newTabs = (html) => html.replace(/<a href="(https?:\/\/[^"]*)"/g, '<a href="$1" target="_blank" rel="noopener"');
 
 const siteDescription = () => readFile(join(CONTENT, 'description.txt'), 'utf8').then((t) => t.trim(), () => '');
@@ -72,7 +79,7 @@ async function load(dir) {
     const headings = await readFile(join(CONTENT, dir, `${name}.headings.txt`), 'utf8')
       .then((text) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean), () => []);
     const page = parse(await readFile(join(CONTENT, dir, f), 'utf8'));
-    return { name, headings, ...page, html: newTabs(await withLastfm(await withIcons(page.html))) };
+    return { name, headings, ...page, html: withMessageBox(newTabs(await withLastfm(await withIcons(page.html)))) };
   }));
 }
 
@@ -88,6 +95,7 @@ function windowHtml({ name, settings, title, html, headings }) {
   return `<section class="win" data-window="${escape(name)}"`
     + (settings.place ? ` data-place="${escape(settings.place)}"` : '')
     + (settings.width === 'fit' ? ' data-fit' : '')
+    + (settings.popup ? ' data-popup' : '')
     + (headings.length ? ` data-headings="${escape(JSON.stringify(headings))}"` : '')
     + ` aria-label="${escape(title)}" tabindex="-1"`
     + (style ? ` style="${style}"` : '')
@@ -120,7 +128,7 @@ async function home({ missing = false } = {}) {
   if (missing) {
     const page = parse(await readFile(join(CONTENT, '404.md'), 'utf8').catch(() => '# not found'));
     windows = windows.map((w) => ({ ...w, settings: { ...w.settings, open: false } }));
-    windows.push({ ...page, name: '404', headings: [], html: newTabs(await withLastfm(await withIcons(page.html))), settings: { ...page.settings, open: true } });
+    windows.push({ ...page, name: '404', headings: [], html: withMessageBox(newTabs(await withLastfm(await withIcons(page.html)))), settings: { ...page.settings, open: true } });
     template = template.replace('<title>errr.in</title>', `<title>${escape(page.title || 'not found')} · errr.in</title>`);
   }
   windows.sort((a, b) => Number(!!a.settings.open) - Number(!!b.settings.open));

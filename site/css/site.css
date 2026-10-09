@@ -73,6 +73,37 @@ html:has(body:not(.writeup)), body:not(.writeup) { height: 100%; overflow: hidde
   pointer-events: none;
 }
 .cite[hidden] { display: none; }
+
+.win[data-popup] .txt { padding: 8px; }
+.win[data-popup] .txt > :first-child { padding-right: 0; }
+.message-row { position: relative; }
+.message-box textarea {
+  display: block;
+  width: 100%;
+  max-height: calc(2lh + 12px);
+  padding: 6px 30px 6px 10px;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 10px;
+  resize: none;
+  font: inherit;
+  color: var(--map-ink);
+  caret-color: var(--map-ink);
+  background: color-mix(in srgb, var(--map-ink) 8%, transparent);
+  outline: none;
+}
+@supports (-webkit-touch-callout: none) {
+  .message-box textarea { font-size: 16px; }
+}
+.message-box textarea::placeholder { color: color-mix(in srgb, var(--map-ink) 45%, transparent); }
+.message-box textarea:focus { background: color-mix(in srgb, var(--map-ink) 12%, transparent); }
+.message-box .trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.message-box button { position: absolute; right: 9px; bottom: 9px; width: 13px; height: 13px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
+.message-box button svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.message-box button:disabled { cursor: default; }
+.message-box button:focus-visible { outline: 1px solid var(--map-ink); outline-offset: 2px; }
+.message-status { margin-top: 0.5em; font-size: 13px; }
+.message-status:empty { display: none; }
 .cite a { color: inherit; }
 .cite-n { margin-right: 0.4em; }
 

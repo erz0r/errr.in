@@ -80,6 +80,12 @@ createServer(async (req, res) => {
       console.log(`\n[perf] from ${req.socket.remoteAddress}\n${JSON.stringify(await readJson(req, url), null, 2)}`);
       return send(204);
     }
+    if (url.pathname === '/api/message' && req.method === 'POST') {
+      const { message, website } = await readJson(req, url);
+      if (typeof message !== 'string' || !message.trim() || message.length > 2000) return send(400);
+      if (!website) console.log(`\n[message, not saved in dev]\n${message.trim()}`);
+      return send(204);
+    }
     if (req.method !== 'GET') return send(405);
 
     const tune = url.searchParams.has('tune');

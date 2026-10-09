@@ -76,7 +76,7 @@ uniform vec4 uRect[MAX];
 uniform vec4 uArea[MAX];
 uniform float uAlpha[MAX];
 uniform vec4 uFade[MAX];
-uniform float uSpread, uNoiseScale;
+uniform float uSpread, uNoiseScale, uPortalReach, uPortalBlur;
 uniform int uCount;
 uniform float uFeather, uBlur, uHaloSize, uHaloGlow, uStackGlow, uOverlay;
 uniform float uBg, uInk, uMapOn;
@@ -139,7 +139,7 @@ float fadeAt(float a, vec2 p, vec4 rect, vec4 pattern) {
   vec2 center = (rect.xy + rect.zw) * 0.5, size = max(rect.zw - rect.xy, vec2(1.0));
   float sweep = 0.5 + dot((p - center) / size, vec2(cos(pattern.z), sin(pattern.z)));
   float turn = clamp(mix(n, sweep, 0.4), 0.0, 1.0);
-  if (pattern.w > 0.5) turn = 1.0 - turn;
+  if (mod(pattern.w, 2.0) > 0.5) turn = 1.0 - turn;
   return smoothstep(0.0, 1.0, (a - turn * uSpread) / (1.0 - uSpread));
 }
 
@@ -157,7 +157,12 @@ void main() {
     vec4 r = uRect[i];
     alpha[i] = i < uCount ? fadeAt(uAlpha[i], p, r, uFade[i]) : 0.0;
     if (i < uCount && p.x > r.x - reach && p.x < r.z + reach && p.y > r.y - reach && p.y < r.w + reach) {
-      halo[i] = alpha[i] * uHaloGlow * roundedBlur(r.xy - e, r.zw + e, p, s, 24.0);
+      float he = e, hs = s;
+      if (uFade[i].w > 1.5) {
+        hs = min(s, 8.0);
+        he = 0.6 * hs;
+      }
+      halo[i] = alpha[i] * uHaloGlow * roundedBlur(r.xy - he, r.zw + he, p, hs, 24.0);
       g += (1.0 - g) * halo[i];
     }
   }
@@ -169,15 +174,23 @@ void main() {
     vec4 t = texture2D(uText, uv), ts = texture2D(uTextSoft, uv);
     vec4 m = texture2D(uMedia, uv), ms = texture2D(uMediaSoft, uv);
     if (i < uCount) {
-      g += (1.0 - g) * halo[i] * uStackGlow;
-      ink *= 1.0 - halo[i] * uStackGlow;
+      float glow = uStackGlow, feather = uFeather;
+      if (uFade[i].w > 1.5) {
+        feather = min(uFeather, 0.25 * min(size.x, size.y));
+        float clear = alpha[i] * roundedBlur(r.xy - uPortalReach, r.zw + uPortalReach, p, max(uPortalBlur, 0.5), 12.0 + uPortalReach);
+        g *= 1.0 - clear;
+        ink *= 1.0 - clear;
+        glow = 1.0;
+      }
+      g += (1.0 - g) * halo[i] * glow;
+      ink *= 1.0 - halo[i] * glow;
       if (d.x >= 0.0 && d.y >= 0.0 && d.x <= size.x && d.y <= size.y) {
-        float fade = cssFade(d.x, size.x, uFeather) * cssFade(d.y, size.y, uFeather) * alpha[i];
+        float fade = cssFade(d.x, size.x, feather) * cssFade(d.y, size.y, feather) * alpha[i];
         float cover = blurSpan(p.x, r.x, r.z, uBlur) * blurSpan(p.y, r.y, r.w, uBlur);
         float soft = cover * uBg + dot(ms.rgb, GRAY) - ms.a * uBg + ts.r * (uInk - uBg);
         g = g * (1.0 - cover * fade) + soft * fade;
         ink *= 1.0 - cover * fade;
-        float sharp = cssFade(d.x, size.x, 2.0 * uFeather) * cssFade(d.y, size.y, 2.0 * uFeather) * alpha[i];
+        float sharp = cssFade(d.x, size.x, 2.0 * feather) * cssFade(d.y, size.y, 2.0 * feather) * alpha[i];
         float content = uBg * (1.0 - m.a) + dot(m.rgb, GRAY);
         content = mix(content, uInk, t.r);
         g = mix(g, content, sharp);
@@ -196,7 +209,7 @@ void main() {
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
   const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5 };
 
   let gl = null;
@@ -267,7 +280,7 @@ void main() {
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-      maxCapacity = Math.min(64, Math.floor((gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) - 10) / 4));
+      maxCapacity = Math.min(64, Math.floor((gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) - 12) / 4));
       blurProgram = compile(BLUR, ['uSrc', 'uSize', 'uDir', 'uSigma']);
       stepProgram = compile(LIQUID_STEP, ['uState', 'uGrid', 'uDamping', 'uDrops']);
       surfaceProgram = compile(LIQUID_SURFACE, ['uState', 'uGrid']);
@@ -298,6 +311,7 @@ void main() {
       bg: num('--bg-gray'), ink: num('--ink-gray'),
       inkColor: css.getPropertyValue('--ink-color').trim().split(/\s+/).map(Number), inkOverride: num('--ink-override'),
       spread: num('--fade-spread'), noiseScale: num('--fade-scale') || 320,
+      portalReach: num('--portal-reach'), portalBlur: num('--portal-blur'),
       refract: num('--liquid-refract'), light: num('--liquid-light'), damping: num('--liquid-damping'),
       click: num('--liquid-click'), splash: num('--liquid-size'),
     };
@@ -638,6 +652,7 @@ void main() {
       areas.set(atlas.areas.get(win) ?? [0, 0, 0, 0], i * 4);
       alphas[i] = win.style.opacity === '' ? 1 : Number(win.style.opacity);
       if (win.dataset.fadeSeed) patterns.set(win.dataset.fadeSeed.split(',').map(Number), i * 4);
+      if (win.hasAttribute('data-popup')) patterns[i * 4 + 3] += 2;
     });
 
     gl.useProgram(main.program);
@@ -658,6 +673,8 @@ void main() {
     gl.uniform4fv(u.uFade, patterns);
     gl.uniform1f(u.uSpread, settings.spread);
     gl.uniform1f(u.uNoiseScale, settings.noiseScale);
+    gl.uniform1f(u.uPortalReach, settings.portalReach);
+    gl.uniform1f(u.uPortalBlur, settings.portalBlur);
     gl.uniform1i(u.uCount, drawn.length);
     gl.uniform1f(u.uFeather, settings.feather);
     gl.uniform1f(u.uBlur, settings.blur);
