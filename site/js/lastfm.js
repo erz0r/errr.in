@@ -20,7 +20,7 @@
     try {
       const data = await (await fetch(url)).json();
       const track = [data.recenttracks?.track ?? []].flat()[0];
-      if (!track) return;
+      if (!track || !/^https:\/\/(www\.)?last\.fm\//.test(track.url)) return;
       const link = Object.assign(document.createElement('a'), {
         href: track.url, textContent: track.name, target: '_blank', rel: 'noopener',
       });

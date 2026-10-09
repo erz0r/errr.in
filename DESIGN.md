@@ -141,6 +141,10 @@ exposed directly and cloudflare handles https.
 - `deploy/nginx.conf` is the config for an `nginx:alpine` container called `errrin`.
   it serves `~/errr.in/site`, shows `404.html` for missing pages, compresses text files,
   and caches `/media/` for a week.
+- security headers: a content security policy that only allows the site's own scripts
+  (pages have no inline scripts; the preset data is inline but not runnable), no
+  framing by other sites, nosniff, and no server version. folders and hidden files
+  answer 404.
 - `deploy/compose.yml` is that container's entry in `~/docker/docker-compose.yml`. it
   mounts `~/errr.in` rather than `~/errr.in/site`, because each deploy swaps the `site`
   folder out and a mount would keep pointing at the old one.
