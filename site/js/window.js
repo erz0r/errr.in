@@ -117,10 +117,10 @@
   function closePopup(popup) {
     const to = openers.get(popup) ?? startWindows[0];
     hide(popup);
-    if (to && to !== popup) {
-      open(to, popup, { back: true });
-      remember(to);
-    }
+    if (!to || to === popup) return;
+    if (to.hidden || closing.has(to)) open(to, popup, { back: true });
+    else to.focus({ preventScroll: true });
+    remember(to);
   }
 
   function showTitle() {
