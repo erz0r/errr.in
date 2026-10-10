@@ -2,6 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { renderRoute, routes } from './content.js';
 import { ICONS } from './icon.js';
+import { llmsTxt } from './llms.js';
 import { loadPresets } from './presets.js';
 import { renderPage } from './render.js';
 import { validate } from './tune/settings.js';
@@ -20,4 +21,5 @@ for (const route of await routes()) {
 }
 await writeFile(join('dist', '404.html'), renderPage(await renderRoute('/404.html'), settings, { presets }));
 for (const [path, draw] of Object.entries(ICONS)) await writeFile(join('dist', path), draw(settings.palette));
+await writeFile(join('dist', 'llms.txt'), await llmsTxt());
 console.log('built dist/');

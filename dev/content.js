@@ -26,7 +26,7 @@ function parse(text) {
   }
   const body = match ? text.slice(match[0].length) : text;
   const title = settings.title ?? body.match(/^#\s+(.+)$/m)?.[1] ?? '';
-  return { settings, title, html: markdown.parse(body) };
+  return { settings, title, body, html: markdown.parse(body) };
 }
 
 async function withIcons(html) {
@@ -101,6 +101,14 @@ function windowHtml({ name, settings, title, html, headings }) {
     + (style ? ` style="${style}"` : '')
     + (settings.open ? '' : ' hidden')
     + `>\n<div class="txt">\n${html}</div>\n${BACK}\n</section>`;
+}
+
+export async function sources() {
+  const read = async (dir) => {
+    const files = (await readdir(join(CONTENT, dir)).catch(() => [])).filter((f) => f.endsWith('.md')).sort();
+    return Promise.all(files.map(async (f) => ({ name: basename(f, '.md'), ...parse(await readFile(join(CONTENT, dir, f), 'utf8')) })));
+  };
+  return { windows: await read('windows'), writeups: await read('writeups'), description: await siteDescription() };
 }
 
 export async function routes() {

@@ -28,6 +28,9 @@ everything you edit is in `content/`.
 - `content/description.txt` is the one-line description used by search engines and link
   previews.
 - `content/404.md` is the window shown for an address that doesn't exist.
+- `/llms.txt` is made from content/ on every build: the description, a map of every page
+  and window, then the full text of each. every page links to it in its head and with a
+  link nobody sees (no size, not focusable, hidden from screen readers).
 
 settings go at the top of a file, between `---` lines:
 

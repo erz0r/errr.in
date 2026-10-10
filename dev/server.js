@@ -4,6 +4,7 @@ import { networkInterfaces } from 'node:os';
 import { extname, resolve, sep } from 'node:path';
 import { renderRoute } from './content.js';
 import { ICONS } from './icon.js';
+import { llmsTxt } from './llms.js';
 import { deletePreset, loadPresets, savePreset } from './presets.js';
 import { renderPage } from './render.js';
 import { formatSettings, validate } from './tune/settings.js';
@@ -92,6 +93,7 @@ createServer(async (req, res) => {
     const page = await renderRoute(url.pathname);
     const render = async (html) => renderPage(html, await loadSettings(), { tune, presets: await loadPresets() });
     if (page) return send(200, await render(page), TYPES['.html']);
+    if (url.pathname === '/llms.txt') return send(200, await llmsTxt(), 'text/plain; charset=utf-8');
     if (ICONS[url.pathname]) return send(200, ICONS[url.pathname]((await loadSettings()).palette), TYPES['.png']);
     if (url.pathname === '/writeup.html') return send(404, 'not found');
 
