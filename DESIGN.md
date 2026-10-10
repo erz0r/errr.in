@@ -74,6 +74,8 @@ other things you can write:
   cursor, and her eyes follow it. the model section of the panel sets her levels and light.
   she casts a hard shadow toward the inside of the window, in the darkest color of the
   gradient map (measured along the whole map, so it works when the map starts light).
+  her upper body sways a little in the loop, and at random moments she blinks (the Blink
+  shape key, sometimes twice) and flicks an ear or both.
 - message box: `{message-box}` is a text box with a send arrow. enter sends. the intro's
   "you can tell me something" opens `content/windows/tell.md`, a popup with just this box.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last

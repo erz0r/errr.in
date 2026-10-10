@@ -94,6 +94,29 @@ if (spot && win) {
     };
     const HEAD_SHARE = 0.35;
 
+    const lids = [];
+    gltf.scene.traverse((o) => {
+      const i = o.morphTargetDictionary?.Blink;
+      if (i !== undefined) lids.push([o, i]);
+    });
+    const between = (lo, hi) => lo + Math.random() * (hi - lo);
+    let blinkAt = performance.now() / 1000 + between(1.5, 4), blinks = 1;
+    const BLINK = [0.07, 0.05, 0.11];
+    const blinkAmount = (t) => {
+      const [close, hold, open] = BLINK;
+      if (t < 0) return 0;
+      if (t < close) return t / close;
+      if (t < close + hold) return 1;
+      if (t < close + hold + open) return 1 - (t - close - hold) / open;
+      return 0;
+    };
+
+    const ears = ['Ear_1_L', 'Ear_1_R'].map((name) => gltf.scene.getObjectByName(name)).filter(Boolean);
+    const twitch = new THREE.Quaternion(), earAxis = new THREE.Vector3(1, 0, 0);
+    let twitchAt = performance.now() / 1000 + between(2, 5), twitchWho = 0, twitchTwice = false;
+    const TWITCH = [0.06, 0.16];
+    const twitchAmount = (t) => (t < 0 ? 0 : t < TWITCH[0] ? t / TWITCH[0] : t < TWITCH[0] + TWITCH[1] ? 1 - (t - TWITCH[0]) / TWITCH[1] : 0);
+
     let last = performance.now();
     const frame = (now) => {
       const dt = Math.min((now - last) / 1000, 0.1);
@@ -111,6 +134,22 @@ if (spot && win) {
       mixer.update(dt);
       look.yaw += (aim.yaw - look.yaw) * Math.min(1, dt * 8);
       look.pitch += (aim.pitch - look.pitch) * Math.min(1, dt * 8);
+      const t = now / 1000;
+      const lid = Math.max(blinkAmount(t - blinkAt), blinks > 1 ? blinkAmount(t - blinkAt - 0.32) : 0);
+      lids.forEach(([mesh, i]) => { mesh.morphTargetInfluences[i] = lid; });
+      if (t > blinkAt + 0.8) {
+        blinkAt = t + between(2.5, 6);
+        blinks = Math.random() < 0.15 ? 2 : 1;
+      }
+      const flick = Math.max(twitchAmount(t - twitchAt), twitchTwice ? twitchAmount(t - twitchAt - 0.28) : 0);
+      ears.forEach((ear, i) => {
+        if (twitchWho === 2 || twitchWho === i) ear.quaternion.multiply(twitch.setFromAxisAngle(earAxis, -0.35 * flick));
+      });
+      if (t > twitchAt + 0.8) {
+        twitchAt = t + between(3, 9);
+        twitchWho = Math.random() < 0.25 ? 2 : Math.floor(Math.random() * 2);
+        twitchTwice = Math.random() < 0.3;
+      }
       gltf.scene.updateMatrixWorld(true);
       if (head) turn(head, head.quaternion.clone(), 0.5 + look.yaw * HEAD_SHARE, look.pitch * HEAD_SHARE);
       eyes.forEach((eye, i) => turn(eye, rest[i], look.yaw * (1 - HEAD_SHARE), look.pitch * (1 - HEAD_SHARE)));
