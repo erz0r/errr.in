@@ -46,7 +46,7 @@ html:has(body:not(.writeup)), body:not(.writeup) { height: 100%; overflow: hidde
 .txt { display: flow-root; }
 .txt .model + :is(p, ul, ol) { margin-top: 0.75em; }
 .txt { position: relative; }
-.model { position: absolute; right: 22px; bottom: 2px; width: 150px; height: 160px; }
+.model { position: absolute; right: 22px; bottom: 2px; width: 300px; height: 160px; }
 @media (max-width: 640px) { .model { position: static; margin: 0.5em auto 0; } }
 .win a { color: inherit; }
 .win img { display: block; max-width: 100%; }

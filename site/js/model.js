@@ -14,15 +14,33 @@ if (spot && win) {
     const gl = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
     gl.outputColorSpace = THREE.SRGBColorSpace;
     gl.setClearColor(0x000000, 0);
+    gl.shadowMap.enabled = true;
+    gl.shadowMap.type = THREE.PCFShadowMap;
+    gl.shadowMap.autoUpdate = false;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(24, 1, 0.1, 20);
-    camera.position.set(0, 0.5, 3.1);
-    camera.lookAt(0, 0.44, 0);
+    const FOV = 24, DISTANCE = 3.1, HER_ASPECT = 150 / 160;
+    const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 20);
+    const placeCamera = () => {
+      const pan = -Math.tan((FOV / 2) * Math.PI / 180) * DISTANCE * Math.max(0, camera.aspect - HER_ASPECT);
+      camera.position.set(pan, 0.85, DISTANCE);
+      camera.lookAt(pan, 0.42, 0);
+    };
+    placeCamera();
     const key = new THREE.DirectionalLight(0xffffff, 1);
     key.position.set(1.2, 2.2, 2.4);
     const fill = new THREE.HemisphereLight(0xffffff, 0x404040, 1);
     scene.add(key, fill);
+    const sun = new THREE.DirectionalLight(0xffffff, 0);
+    sun.position.set(2.2, 2.3, 1.8);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.6, bottom: -1.6, near: 0.5, far: 8 });
+    scene.add(sun, sun.target);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.ShadowMaterial({ opacity: 1 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
     const light = () => {
       key.intensity = css('--model-light', 1.3);
       fill.intensity = css('--model-fill', 0.5);
@@ -36,6 +54,21 @@ if (spot && win) {
     const mixer = new THREE.AnimationMixer(gltf.scene);
     const clip = gltf.animations.find((a) => a.name === 'SitIdle') ?? gltf.animations[0];
     if (clip) mixer.clipAction(clip).setLoop(THREE.LoopRepeat).play();
+    const materials = new Set();
+    let lowest = Infinity;
+    mixer.update(0);
+    gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      o.receiveShadow = false;
+      [o.material].flat().forEach((m) => materials.add(m));
+      o.computeBoundingBox?.();
+      const box = (o.boundingBox ?? o.geometry.boundingBox)?.clone().applyMatrix4(o.matrixWorld);
+      if (box) lowest = Math.min(lowest, box.min.y);
+    });
+    floor.position.y = Number.isFinite(lowest) ? lowest : 0;
+    const paint = (on) => materials.forEach((m) => { m.colorWrite = on; });
 
     const eyes = ['Left Eye', 'Right Eye'].map((name) => gltf.scene.getObjectByName(name)).filter(Boolean);
     const rest = eyes.map((eye) => eye.quaternion.clone());
@@ -72,6 +105,7 @@ if (spot && win) {
       if (canvas.width !== w || canvas.height !== h) {
         gl.setSize(w, h, false);
         camera.aspect = w / h;
+        placeCamera();
         camera.updateProjectionMatrix();
       }
       mixer.update(dt);
@@ -80,8 +114,15 @@ if (spot && win) {
       gltf.scene.updateMatrixWorld(true);
       if (head) turn(head, head.quaternion.clone(), 0.5 + look.yaw * HEAD_SHARE, look.pitch * HEAD_SHARE);
       eyes.forEach((eye, i) => turn(eye, rest[i], look.yaw * (1 - HEAD_SHARE), look.pitch * (1 - HEAD_SHARE)));
+      gl.shadowMap.needsUpdate = true;
+      floor.visible = true;
+      paint(false);
       gl.render(scene, camera);
-      dispatchEvent(new CustomEvent('model:frame', { detail: { canvas, spot } }));
+      dispatchEvent(new CustomEvent('model:frame', { detail: { canvas, spot, layer: 'shadow' } }));
+      floor.visible = false;
+      paint(true);
+      gl.render(scene, camera);
+      dispatchEvent(new CustomEvent('model:frame', { detail: { canvas, spot, layer: 'model' } }));
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);

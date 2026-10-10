@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 
 await build({
   stdin: {
-    contents: `export { AnimationMixer, Box3, DirectionalLight, HemisphereLight, LoopRepeat, PerspectiveCamera, Quaternion, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
+    contents: `export { AnimationMixer, Box3, DirectionalLight, HemisphereLight, LoopRepeat, Mesh, PCFShadowMap, PerspectiveCamera, PlaneGeometry, Quaternion, Scene, ShadowMaterial, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
 export { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';`,
     resolveDir: '.',
     loader: 'js',

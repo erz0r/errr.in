@@ -78,7 +78,8 @@ uniform float uAlpha[MAX];
 uniform vec4 uFade[MAX];
 uniform float uSpread, uNoiseScale, uPortalReach, uPortalBlur;
 uniform vec4 uTail;
-uniform sampler2D uModel;
+uniform sampler2D uModel, uModelShadow;
+uniform float uShadowGray;
 uniform vec4 uModelRect;
 uniform float uModelWin;
 uniform vec3 uModelLevels;
@@ -227,8 +228,10 @@ void main() {
   float halo[MAX], alpha[MAX];
   float g = 0.0;
   float ink = 0.0;
+  float shade = 0.0;
   vec2 mu = (p - uModelRect.xy) / max(uModelRect.zw - uModelRect.xy, vec2(1.0));
   vec4 mm = texture2D(uModel, clamp(mu, 0.0, 1.0));
+  float sa = texture2D(uModelShadow, clamp(mu, 0.0, 1.0)).a * step(0.0, mu.x) * step(mu.x, 1.0) * step(0.0, mu.y) * step(mu.y, 1.0);
   mm *= step(0.0, mu.x) * step(mu.x, 1.0) * step(0.0, mu.y) * step(mu.y, 1.0);
   float mg = mm.a > 0.001 ? dot(mm.rgb / mm.a, GRAY) : 0.0;
   mg = pow(clamp((mg - uModelLevels.x) / max(uModelLevels.y - uModelLevels.x, 0.001), 0.0, 1.0), 1.0 / max(uModelLevels.z, 0.01));
@@ -263,10 +266,12 @@ void main() {
         float clear = alpha[i] * bubbleEdge(p, r, uPortalReach, max(uPortalBlur, 0.5));
         g *= 1.0 - clear;
         ink *= 1.0 - clear;
+        shade *= 1.0 - clear;
         glow = 1.0;
       }
       g += (1.0 - g) * halo[i] * glow;
       ink *= 1.0 - halo[i] * glow;
+      shade *= 1.0 - halo[i] * glow;
       float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
       if (popup ? sd < 0.0 : inRect > 0.5) {
         t *= inRect; ts *= inRect; m *= inRect; ms *= inRect;
@@ -276,17 +281,24 @@ void main() {
         float soft = cover * uBg + dot(ms.rgb, GRAY) - ms.a * uBg + ts.r * (uInk - uBg);
         g = g * (1.0 - cover * fade) + soft * fade;
         ink *= 1.0 - cover * fade;
+        shade *= 1.0 - cover * fade;
         float sharp = (popup ? clamp(-sd / max(2.0 * feather, 0.5), 0.0, 1.0) * tip : cssFade(d.x, size.x, 2.0 * feather) * cssFade(d.y, size.y, 2.0 * feather)) * alpha[i];
         float content = uBg * (1.0 - m.a) + dot(m.rgb, GRAY);
         content = mix(content, uInk, t.r);
         g = mix(g, content, sharp);
         ink = mix(ink, t.r, sharp);
+        shade *= 1.0 - sharp;
         if (abs(float(i) - uModelWin) < 0.5) {
+          g = mix(g, uShadowGray, sa * fade);
+          ink *= 1.0 - sa * fade;
+          shade = mix(shade, 1.0, sa * fade);
           g = mix(g, mg, mm.a * fade);
+          shade *= 1.0 - mm.a * fade;
           ink *= 1.0 - mm.a * fade;
         }
         g = mix(g, uInk, t.r * uOverlay * alpha[i]);
         ink = mix(ink, 1.0, t.r * uOverlay * alpha[i]);
+        shade *= 1.0 - t.r * uOverlay * alpha[i];
       }
     }
   }
@@ -295,13 +307,14 @@ void main() {
   if (uDither > 0.0) g = mix(g, quantize(g, threshold(floor(gl_FragCoord.xy / (max(uDitherScale, 1.0) * uScale)))), uDither);
   vec3 color = uMapOn > 0.5 ? texture2D(uRamp, vec2((g * 255.0 + 0.5) / 256.0, 0.5)).rgb : vec3(g);
   if (uMapOn > 0.5) color = mix(color, uInkColor, ink * uInkOverride);
+  if (uMapOn > 0.5) color = mix(color, texture2D(uRamp, vec2((uShadowGray * 255.0 + 0.5) / 256.0, 0.5)).rgb, shade);
   gl_FragColor = vec4(color, 1.0);
 }`;
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelRect', 'uModelWin', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
-  const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5, uModel: 6 };
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uModelRect', 'uModelWin', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
+  const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5, uModel: 6, uModelShadow: 7 };
 
   let gl = null;
   let blurProgram = null;
@@ -311,7 +324,7 @@ void main() {
   let atlas = null;
   let atlasDirty = true;
   let stepProgram = null, surfaceProgram = null;
-  const model = { tex: null, spot: null };
+  const model = { tex: null, shadow: null, spot: null };
   let liquid = null;
   let stillWater = null;
 
@@ -417,6 +430,12 @@ void main() {
       for (let c = 0; c < 3; c++) ramp[i * 4 + c] = parseInt(hex.slice(i * 6 + c * 2, i * 6 + c * 2 + 2), 16);
       ramp[i * 4 + 3] = 255;
     }
+    let darkest = 0, least = Infinity;
+    for (let i = 0; i < 256; i++) {
+      const l = 0.2126 * ramp[i * 4] + 0.7152 * ramp[i * 4 + 1] + 0.0722 * ramp[i * 4 + 2];
+      if (l < least) [least, darkest] = [l, i];
+    }
+    settings.shadowGray = darkest / 255;
     if (rampTex) gl.deleteTexture(rampTex);
     rampTex = newTexture(256, 1, ramp);
   }
@@ -795,6 +814,7 @@ void main() {
       uRamp: rampTex, uText: atlas.text, uTextSoft: atlas.textSoft, uMedia: atlas.media, uMediaSoft: atlas.mediaSoft,
       uSurface: liquid ? liquid.surface : stillWater,
       uModel: model.tex ?? stillWater,
+      uModelShadow: model.shadow ?? stillWater,
     };
     for (const [name, unit] of Object.entries(UNITS)) {
       gl.activeTexture(gl.TEXTURE0 + unit);
@@ -822,6 +842,7 @@ void main() {
     gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top, mr.right - box.left, mr.bottom - box.top] : [0, 0, 0, 0]));
     gl.uniform1f(u.uModelWin, modelWin);
     gl.uniform3f(u.uModelLevels, ...settings.modelLevels);
+    gl.uniform1f(u.uShadowGray, settings.shadowGray);
     gl.uniform1i(u.uCount, drawn.length);
     gl.uniform1f(u.uFeather, settings.feather);
     gl.uniform1f(u.uBlur, settings.blur);
@@ -872,15 +893,16 @@ void main() {
   addEventListener('model:frame', (e) => {
     if (!gl) return;
     model.spot = e.detail.spot;
-    if (!model.tex) model.tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, model.tex);
+    const key = e.detail.layer === 'shadow' ? 'shadow' : 'tex';
+    if (!model[key]) model[key] = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, model[key]);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, e.detail.canvas);
-    render();
+    if (key === 'tex') render();
   });
   addEventListener('tune:apply', () => {
     if (!gl) return;
