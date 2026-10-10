@@ -59,6 +59,16 @@ const MESSAGE_BOX = '<form class="message-box" novalidate><div class="message-ro
   + '<p class="message-status" role="status"></p></form>';
 const withMessageBox = (html) => html.replace(/<p>\{message-box\}<\/p>|\{message-box\}/g, MESSAGE_BOX);
 
+async function withRandom(html) {
+  for (const name of new Set([...html.matchAll(/\{random:([\w-]+)\}/g)].map((m) => m[1]))) {
+    const options = (await readFile(join(CONTENT, `${name}.txt`), 'utf8').catch(() => ''))
+      .split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const span = options.length ? `<span data-random="${escape(JSON.stringify(options))}">${escape(options[0])}</span>` : '';
+    html = html.replaceAll(`{random:${name}}`, span);
+  }
+  return html;
+}
+
 const newTabs = (html) => html.replace(/<a href="(https?:\/\/[^"]*)"/g, '<a href="$1" target="_blank" rel="noopener"');
 
 const siteDescription = () => readFile(join(CONTENT, 'description.txt'), 'utf8').then((t) => t.trim(), () => '');
@@ -79,7 +89,7 @@ async function load(dir) {
     const headings = await readFile(join(CONTENT, dir, `${name}.headings.txt`), 'utf8')
       .then((text) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean), () => []);
     const page = parse(await readFile(join(CONTENT, dir, f), 'utf8'));
-    return { name, headings, ...page, html: withMessageBox(newTabs(await withLastfm(await withIcons(page.html)))) };
+    return { name, headings, ...page, html: withMessageBox(newTabs(await withRandom(await withLastfm(await withIcons(page.html))))) };
   }));
 }
 
@@ -136,7 +146,7 @@ async function home({ missing = false } = {}) {
   if (missing) {
     const page = parse(await readFile(join(CONTENT, '404.md'), 'utf8').catch(() => '# not found'));
     windows = windows.map((w) => ({ ...w, settings: { ...w.settings, open: false } }));
-    windows.push({ ...page, name: '404', headings: [], html: withMessageBox(newTabs(await withLastfm(await withIcons(page.html)))), settings: { ...page.settings, open: true } });
+    windows.push({ ...page, name: '404', headings: [], html: withMessageBox(newTabs(await withRandom(await withLastfm(await withIcons(page.html))))), settings: { ...page.settings, open: true } });
     template = template.replace('<title>errr.in</title>', `<title>${escape(page.title || 'not found')} · errr.in</title>`);
   }
   windows.sort((a, b) => Number(!!a.settings.open) - Number(!!b.settings.open));

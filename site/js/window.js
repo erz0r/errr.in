@@ -448,6 +448,11 @@
     try { localStorage.setItem(key, heading.textContent); } catch {}
   }
 
+  for (const el of stage.querySelectorAll('[data-random]')) {
+    const options = JSON.parse(el.dataset.random);
+    el.textContent = options[Math.floor(Math.random() * options.length)];
+  }
+
   const linked = fromHash();
   if (linked) open(linked);
 })();

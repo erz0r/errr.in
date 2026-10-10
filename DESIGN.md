@@ -54,6 +54,8 @@ width: fit
 
 other things you can write:
 
+- random picks: `{random:name}` shows a random line from `content/<name>.txt` on each visit
+  (the first line without javascript). the 404 page uses `{random:kaomoji}`.
 - random headings: put one per line in `<name>.headings.txt` next to the window's file.
   a visitor never gets the same one twice in a row.
 - footnotes: `a claim[^smith]`, and anywhere below, `[^smith]: the source.` in a window,

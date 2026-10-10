@@ -8,6 +8,7 @@ function plain(body) {
     .replace(/\{icon:[\w-]+\} ?/g, '')
     .replace(/\{lastfm:([\w-]+)\}/g, '(what erin is listening to on last.fm right now)')
     .replace(/\{message-box\}/g, '(a text box for sending erin a message)')
+    .replace(/\{random:([\w-]+)\}/g, '(a random $1)')
     .replace(/\[([^\]]+)\]\(copy:([^)]+)\)/g, '$1 (click to copy: $2)')
     .replace(/\]\(#([\w-]+)\)/g, `](${ORIGIN}/#$1)`)
     .replace(/\]\((\/[^)]*)\)/g, `](${ORIGIN}$1)`)
