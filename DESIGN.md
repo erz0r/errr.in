@@ -141,6 +141,14 @@ scroll. a window too tall for the screen scrolls inside itself.
 a writeup is a normal scrolling page with a text column down the middle. the renderer
 treats the column as one tall window, so its sides dissolve into the margins.
 
+### printing
+
+printing the home page gives a folded black and white booklet (`site/js/print.js`): landscape
+sheets with two panels and a dithered fold down the middle. a cover with a 1-bit dithered
+portrait (`site/media/print-portrait.png`, rendered from the blender file), then intro,
+about and miscellanea with their notes printed, then a back cover. writeups print as
+plain black text.
+
 ## tuning panel
 
 open any page with `?tune` on the dev server. it never ships in `dist/`. the ` key hides

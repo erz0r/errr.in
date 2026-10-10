@@ -165,3 +165,40 @@ html:not(.gl) .win[data-shape="column"] { border-radius: 0; }
 :is(.article, .txt) .footnotes h2 { margin: 0 0 0.4em; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; }
 :is(.article, .txt) .footnotes li { margin-bottom: 0.6em; }
 .txt .footnotes { display: none; }
+
+.booklet { display: none; }
+
+@media print {
+  @page { size: landscape; margin: 0; }
+  html, body, html:has(body:not(.writeup)), body:not(.writeup) { height: auto !important; overflow: visible !important; background: #fff !important; }
+  body:not(.writeup) > :not(.booklet) { display: none !important; }
+  .booklet { display: block; color: #000; font-family: Georgia, "Times New Roman", serif; font-size: 10pt; line-height: 1.45; }
+  .sheet { position: relative; display: grid; grid-template-columns: 1fr 1fr; width: 100vw; height: 100vh; break-after: page; overflow: hidden; }
+  .sheet:last-child { break-after: auto; }
+  .panel { padding: 16mm 18mm; overflow: hidden; }
+  .panel-text :is(h1, h2) { margin: 0 0 3mm; font-size: 16pt; font-weight: 600; }
+  .panel-text h3 { margin: 5mm 0 1.5mm; font-size: 11pt; font-weight: 600; }
+  .panel-text :is(p, ul, ol) + :is(p, ul, ol) { margin-top: 2.5mm; }
+  .panel-text :is(ul, ol) { padding-left: 5mm; }
+  .panel-text a { color: #000; text-decoration: underline; }
+  .panel-text .icon { width: 1em; height: 1em; margin-right: 0.3em; vertical-align: -0.15em; fill: #000; }
+  .panel-text .footnotes { display: block; margin-top: 5mm; padding-top: 2mm; border-top: 0.3mm solid #000; font-size: 8pt; }
+  .panel-text .footnotes h2 { font-size: 8pt; text-transform: lowercase; letter-spacing: 0.08em; }
+  .panel-text .footnotes ol { padding-left: 4mm; }
+  .panel-text .footnotes a[data-footnote-backref] { display: none; }
+  .cover, .back-cover { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .cover h1 { font-size: 32pt; font-weight: 600; margin: 2mm 0 6mm; }
+  .cover .portrait { width: auto; max-width: 70%; max-height: 55%; image-rendering: pixelated; }
+  .cover .tagline { margin-top: 6mm; font-style: italic; }
+  .kicker { font-size: 8pt; letter-spacing: 0.1em; text-transform: lowercase; }
+  .back-cover .url { font-size: 22pt; margin: 2mm 0 8mm; }
+  .fold { position: absolute; top: 0; bottom: 0; left: 50%; display: flex; transform: translateX(-50%); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .fold span { width: 2mm; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .fold .dither-1 { background: radial-gradient(circle at 1px 1px, #000 0.5px, transparent 0.6px) 0 0 / 4px 4px; }
+  .fold .dither-2 { background: radial-gradient(circle at 1px 1px, #000 0.55px, transparent 0.65px) 0 0 / 2px 2px; }
+  .fold .dither-3 { background: repeating-conic-gradient(#000 0 25%, transparent 0 50%) 0 0 / 2px 2px; }
+  .fold span:nth-child(3) { border-right: 0.3mm dashed #000; }
+  .writeup .stage { display: none !important; }
+  .writeup .article { color: #000; }
+  .writeup .article a { color: #000; }
+}
