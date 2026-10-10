@@ -10,8 +10,8 @@ width: fit
 
 ### past visual works
 
-- [lattice organism](#lattice-organism)[^lo], 2023
-- [neural triptych](#neural-triptych)[^nt], 2020
+- [lattice organism](https://www.sothebys.com/en/buy/auction/2023/my-body-my-business/lattice-organism)[^lo], 2023
+- [neural triptych](https://www.sothebys.com/en/buy/auction/2024/r-evolutionaries-digital-art-through-the-decade/neural-triptych)[^nt], 2020
 
 [^ex]: stylegan2, clip, vqgan
 

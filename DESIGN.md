@@ -48,9 +48,6 @@ width: fit
 - `max-width`: with `width: fit`, the widest it gets (default 640).
 - `height`: in px. leave it out to fit the content.
 - `description`: writeups only. replaces `description.txt` for that page.
-- `art: true`: the window's images keep their real colors instead of going through the
-  gradient map. the window around them still glows and fades. used for the artwork
-  windows, which hold just an image (web-sized copies live in `site/media/art/`).
 - `popup: true`: the window opens as a small bubble on top of the window it was opened from,
   just above the link, with a tail pointing at it. everything around it fades to the page
   color. clicking outside or escape closes it.
