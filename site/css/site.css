@@ -3,7 +3,13 @@
 :root { --column: 720px; }
 
 html { background: var(--ramp-0); }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+@font-face {
+  font-family: "Fraunces";
+  src: url("/media/fonts/fraunces.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+body { font-family: "Fraunces", Georgia, serif; font-variation-settings: "SOFT" 100, "WONK" 0; }
 
 .stage {
   position: relative;
@@ -46,7 +52,7 @@ html:has(body:not(.writeup)), body:not(.writeup) { height: 100%; overflow: hidde
 .txt { display: flow-root; }
 .txt .model + :is(p, ul, ol) { margin-top: 0.75em; }
 .txt { position: relative; }
-.model { position: absolute; right: 22px; bottom: 2px; width: 300px; height: 160px; }
+.model { position: absolute; right: 22px; bottom: 2px; width: 300px; height: 160px; pointer-events: none; }
 @media (max-width: 640px) { .model { position: static; margin: 0.5em auto 0; } }
 .win a { color: inherit; }
 .win img { display: block; max-width: 100%; }
@@ -172,7 +178,7 @@ html:not(.gl) .win[data-shape="column"] { border-radius: 0; }
   @page { size: landscape; margin: 0; }
   html, body, html:has(body:not(.writeup)), body:not(.writeup) { height: auto !important; overflow: visible !important; background: #fff !important; }
   body:not(.writeup) > :not(.booklet) { display: none !important; }
-  .booklet { display: block; color: #000; font-family: Georgia, "Times New Roman", serif; font-size: 10pt; line-height: 1.45; }
+  .booklet { display: block; color: #000; font-family: "Fraunces", Georgia, serif; font-size: 10pt; line-height: 1.45; }
   .sheet { position: relative; display: grid; grid-template-columns: 1fr 1fr; width: 100vw; height: 100vh; break-after: page; overflow: hidden; }
   .sheet:last-child { break-after: auto; }
   .panel { padding: 16mm 18mm; overflow: hidden; }

@@ -3,6 +3,9 @@
 source for errr.in. windows float on a dark page, glow, and dissolve at the edges, and the
 whole page is recolored through a gradient map.
 
+the font is fraunces (sil open font license, `site/media/fonts/`), with its soft axis turned
+all the way up.
+
 ## running it
 
 ```
