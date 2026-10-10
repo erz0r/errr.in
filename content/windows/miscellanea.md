@@ -17,6 +17,6 @@ width: fit
 
 [^sft]: studying all the ways they tend to counteract the rules; and in turn, also fine-tuning them to write coherently with restrictions!
 
-[^lo]: sold at sotheby's, in pussy riot's benefit auction 'My Body My Business'
+[^lo]: sold at Sotheby's, in Pussy Riot's benefit auction 'My Body My Business'
 
-[^nt]: sold at sotheby's, in '{R(Evolutionaries);} Digital Art Through The Decade'
+[^nt]: sold at Sotheby's, in '{R(Evolutionaries);} Digital Art Through The Decade'
