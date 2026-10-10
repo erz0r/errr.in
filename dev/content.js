@@ -59,11 +59,12 @@ const MESSAGE_BOX = '<form class="message-box" novalidate><div class="message-ro
   + '<p class="message-status" role="status"></p></form>';
 const withMessageBox = (html) => html.replace(/<p>\{message-box\}<\/p>|\{message-box\}/g, MESSAGE_BOX);
 
+const fileVersion = (path) => createHash('sha256').update(readFileSync(join(SITE, path))).digest('hex').slice(0, 8);
+
 function withModel(html) {
   return html.replace(/(?:<p>)?\{model:([\w-]+)\}(?:<\/p>)?/g, (_, name) => {
-    const file = join(SITE, 'media', `${name}.glb`);
-    const v = createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 8);
-    return `<div class="model" data-src="/media/${name}.glb?v=${v}" aria-hidden="true"></div>`;
+    const model = `/media/${name}.glb`, engine = '/js/vendor/three.js';
+    return `<div class="model" data-src="${model}?v=${fileVersion(model)}" data-engine="${engine}?v=${fileVersion(engine)}" aria-hidden="true"></div>`;
   });
 }
 

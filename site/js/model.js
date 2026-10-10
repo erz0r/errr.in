@@ -9,7 +9,7 @@ if (spot && win) {
 
   async function start() {
     started = true;
-    const THREE = await import('./vendor/three.js');
+    const THREE = await import(spot.dataset.engine);
     const canvas = document.createElement('canvas');
     const gl = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
     gl.outputColorSpace = THREE.SRGBColorSpace;
