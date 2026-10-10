@@ -246,11 +246,14 @@ void main() {
   vec2 fc = uLife > 1.5 ? (floor(gl_FragCoord.xy) + 0.5) * cellPx : gl_FragCoord.xy;
   vec2 p = vec2(fc.x, uSize.y * uScale - fc.y) / uScale;
   bool covered = false;
+  vec2 cell = floor(fc / cellPx);
+  float steps = max(uDitherLevels - 1.0, 1.0);
   vec4 water = (texture2D(uSurface, vec2(p.x, uLiquidSize.y - p.y) / uLiquidSize) * 255.0 - 128.0) / 127.0;
   p += vec2(water.y, -water.z) * uRefract;
   float e = uHaloSize * 0.6, s = max(uHaloSize, 0.5), reach = e + 3.0 * s;
   float halo[MAX], alpha[MAX];
-  float g = 0.0;
+  // with the game of life on, live cells sit on the page a tone up, under the halos and windows
+  float g = uLife > 0.5 && uLife < 1.5 ? step(0.5, texture2D(uLifeState, (cell + 0.5) / uLifeGrid).r) / steps : 0.0;
   float ink = 0.0;
   float shade = 0.0;
 
@@ -340,20 +343,13 @@ void main() {
   }
 
   g = clamp(g + water.x * uLight, 0.0, 1.0);
-  vec2 cell = floor(fc / cellPx);
-  bool life = uLife > 0.5 && !covered;
-  float dither = life && uDither <= 0.0 ? 1.0 : uDither;
-  if (dither > 0.0) {
+  if (uLife > 1.5) {
+    // the first generation: background dither cells that round up a tone start alive
     float q = quantize(g, threshold(cell));
-    if (life) {
-      // a dither cell is alive when it rounds up a tone; dead ones round down
-      float steps = max(uDitherLevels - 1.0, 1.0), below = floor(g * steps) / steps;
-      if (uLife > 1.5) { gl_FragColor = vec4(step(below + 0.5 / steps, q), 0.0, 0.0, 1.0); return; }
-      q = min(below + step(0.5, texture2D(uLifeState, (cell + 0.5) / uLifeGrid).r) / steps, 1.0);
-    }
-    g = mix(g, q, dither);
+    gl_FragColor = covered ? vec4(0.0, 1.0, 0.0, 1.0) : vec4(step(floor(g * steps) / steps + 0.5 / steps, q), 0.0, 0.0, 1.0);
+    return;
   }
-  if (uLife > 1.5) { gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0); return; }
+  if (uDither > 0.0) g = mix(g, quantize(g, threshold(cell)), uDither);
   vec3 color = uMapOn > 0.5 ? texture2D(uRamp, vec2((g * 255.0 + 0.5) / 256.0, 0.5)).rgb : vec3(g);
   if (uMapOn > 0.5) color = mix(color, uInkColor, ink * uInkOverride);
   if (uMapOn > 0.5) color = mix(color, texture2D(uRamp, vec2((uShadowGray * 255.0 + 0.5) / 256.0, 0.5)).rgb, shade);

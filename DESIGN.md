@@ -115,13 +115,13 @@ in a 256-color ramp made from the palette.
 - everything that changes the picture asks for a frame, and the page is drawn at most once per
   display frame. a new frame of her redraws only her box (she can't change pixels outside it),
   which is why the canvas keeps its drawing between frames.
-- easter egg: three quick clicks or taps on the background turn its dither dots into conway's game
-  of life, and three more turn it back. a dither cell that rounds up a tone is a live cell, so the
-  first generation is the pattern already on screen; then live cells draw a tone up and dead ones a
-  tone down, so the glows settle into bands as the dots die. windows keep their own dithering, and
-  the game runs on underneath them, so things wander behind a window and come out the other side.
-  if the background has (almost) no live cells, at the start or later, it gets a few patches of
-  random soup. 15 generations a second, on a torus.
+- easter egg: three quick clicks or taps on the background start conway's game of life on the page,
+  and three more stop it. the first generation is the background's dither dots as they are (a cell
+  that rounds up a tone starts alive). live cells sit on the page a tone up, under the halos and
+  windows, which keep their own dithering, so the game shows on the bare page and fades out under
+  the glows. it runs on underneath the windows too, so things wander behind a window and come out
+  the other side. if the page has (almost) no live cells, at the start or later, it gets a few
+  patches of random soup. 15 generations a second, on a torus.
 - clicking drops a ripple that spreads across the page. it is turned off for reduced
   motion.
 - without webgl or javascript, css draws plain windows in the palette's colors.
