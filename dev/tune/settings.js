@@ -98,6 +98,11 @@ export function cssVars(s) {
   --dither-scale: ${s.ditherScale};
   --dither-spread: ${s.ditherSpread};
   --dither-pattern: ${s.ditherPattern};
+  --model-black: ${s.modelBlack};
+  --model-white: ${s.modelWhite};
+  --model-gamma: ${s.modelGamma};
+  --model-light: ${s.modelLight};
+  --model-fill: ${s.modelFill};
   --window-layout: ${s.windowLayout};
   --bg-gray: ${+bg.toFixed(4)};
 ${palette}
@@ -125,6 +130,11 @@ const RANGES = {
   ditherLevels: [2, 32, 4],
   ditherScale: [1, 8, 2],
   ditherSpread: [0, 1, 1],
+  modelBlack: [0, 1, 0],
+  modelWhite: [0, 1, 1],
+  modelGamma: [0.2, 3, 1],
+  modelLight: [0, 6, 1.3],
+  modelFill: [0, 4, 0.5],
   minContrast: [1, 12, 4.5],
   windowPush: [0, 2, 1],
 };

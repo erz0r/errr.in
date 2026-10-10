@@ -78,6 +78,10 @@ uniform float uAlpha[MAX];
 uniform vec4 uFade[MAX];
 uniform float uSpread, uNoiseScale, uPortalReach, uPortalBlur;
 uniform vec4 uTail;
+uniform sampler2D uModel;
+uniform vec4 uModelRect;
+uniform float uModelWin;
+uniform vec3 uModelLevels;
 uniform float uDither, uDitherLevels, uDitherScale, uDitherSpread, uDitherPattern;
 uniform int uCount;
 uniform float uFeather, uBlur, uHaloSize, uHaloGlow, uStackGlow, uOverlay;
@@ -223,6 +227,11 @@ void main() {
   float halo[MAX], alpha[MAX];
   float g = 0.0;
   float ink = 0.0;
+  vec2 mu = (p - uModelRect.xy) / max(uModelRect.zw - uModelRect.xy, vec2(1.0));
+  vec4 mm = texture2D(uModel, clamp(mu, 0.0, 1.0));
+  mm *= step(0.0, mu.x) * step(mu.x, 1.0) * step(0.0, mu.y) * step(mu.y, 1.0);
+  float mg = mm.a > 0.001 ? dot(mm.rgb / mm.a, GRAY) : 0.0;
+  mg = pow(clamp((mg - uModelLevels.x) / max(uModelLevels.y - uModelLevels.x, 0.001), 0.0, 1.0), 1.0 / max(uModelLevels.z, 0.01));
 
   for (int i = 0; i < MAX; i++) {
     halo[i] = 0.0;
@@ -272,6 +281,10 @@ void main() {
         content = mix(content, uInk, t.r);
         g = mix(g, content, sharp);
         ink = mix(ink, t.r, sharp);
+        if (abs(float(i) - uModelWin) < 0.5) {
+          g = mix(g, mg, mm.a * fade);
+          ink *= 1.0 - mm.a * fade;
+        }
         g = mix(g, uInk, t.r * uOverlay * alpha[i]);
         ink = mix(ink, 1.0, t.r * uOverlay * alpha[i]);
       }
@@ -287,8 +300,8 @@ void main() {
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
-  const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5 };
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelRect', 'uModelWin', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
+  const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5, uModel: 6 };
 
   let gl = null;
   let blurProgram = null;
@@ -298,6 +311,7 @@ void main() {
   let atlas = null;
   let atlasDirty = true;
   let stepProgram = null, surfaceProgram = null;
+  const model = { tex: null, spot: null };
   let liquid = null;
   let stillWater = null;
 
@@ -358,7 +372,7 @@ void main() {
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-      maxCapacity = Math.min(64, Math.floor((gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) - 16) / 4));
+      maxCapacity = Math.min(64, Math.floor((gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) - 20) / 4));
       blurProgram = compile(BLUR, ['uSrc', 'uSize', 'uDir', 'uSigma']);
       stepProgram = compile(LIQUID_STEP, ['uState', 'uGrid', 'uDamping', 'uDrops']);
       surfaceProgram = compile(LIQUID_SURFACE, ['uState', 'uGrid']);
@@ -392,6 +406,7 @@ void main() {
       portalReach: num('--portal-reach'), portalBlur: num('--portal-blur'),
       dither: num('--dither-amount') || 0, ditherLevels: num('--dither-levels') || 4, ditherScale: num('--dither-scale') || 2,
       ditherSpread: num('--dither-spread'),
+      modelLevels: [num('--model-black') || 0, Number.isNaN(num('--model-white')) ? 1 : num('--model-white'), num('--model-gamma') || 1],
       ditherPattern: Math.max(0, ['bayer2', 'bayer4', 'bayer8', 'noise', 'lines', 'diagonal'].indexOf(css.getPropertyValue('--dither-pattern').trim())),
       refract: num('--liquid-refract'), light: num('--liquid-light'), damping: num('--liquid-damping'),
       click: num('--liquid-click'), splash: num('--liquid-size'),
@@ -779,6 +794,7 @@ void main() {
     const textures = {
       uRamp: rampTex, uText: atlas.text, uTextSoft: atlas.textSoft, uMedia: atlas.media, uMediaSoft: atlas.mediaSoft,
       uSurface: liquid ? liquid.surface : stillWater,
+      uModel: model.tex ?? stillWater,
     };
     for (const [name, unit] of Object.entries(UNITS)) {
       gl.activeTexture(gl.TEXTURE0 + unit);
@@ -801,6 +817,11 @@ void main() {
     gl.uniform1f(u.uDitherScale, settings.ditherScale);
     gl.uniform1f(u.uDitherSpread, Number.isNaN(settings.ditherSpread) ? 1 : settings.ditherSpread);
     gl.uniform1f(u.uDitherPattern, settings.ditherPattern);
+    const modelWin = model.tex && model.spot ? drawn.indexOf(model.spot.closest('.win')) : -1;
+    const mr = model.spot?.getBoundingClientRect();
+    gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top, mr.right - box.left, mr.bottom - box.top] : [0, 0, 0, 0]));
+    gl.uniform1f(u.uModelWin, modelWin);
+    gl.uniform3f(u.uModelLevels, ...settings.modelLevels);
     gl.uniform1i(u.uCount, drawn.length);
     gl.uniform1f(u.uFeather, settings.feather);
     gl.uniform1f(u.uBlur, settings.blur);
@@ -848,6 +869,19 @@ void main() {
     if (win) { forget(win); render(); }
   }, true);
   document.fonts?.ready.then(() => { [...rasters.keys()].forEach(forget); render(); });
+  addEventListener('model:frame', (e) => {
+    if (!gl) return;
+    model.spot = e.detail.spot;
+    if (!model.tex) model.tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, model.tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, e.detail.canvas);
+    render();
+  });
   addEventListener('tune:apply', () => {
     if (!gl) return;
     readSettings();

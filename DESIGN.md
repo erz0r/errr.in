@@ -67,6 +67,11 @@ other things you can write:
   current ones come from simple icons (cc0). any one-color svg works.
 - copy links: `[rukoaraba](copy:rukoaraba)` copies the text when clicked.
 - links to other sites open in a new tab.
+- 3d model: `{model:erinsona}` shows `site/media/erinsona.glb` (exported from the `SitIdle` action in
+  erinsona_base_v1.blend). three.js (`site/js/vendor/three.js`, rebuilt with `npm run vendor`)
+  renders her off screen and the main renderer draws her through the gradient map, inside
+  her window. her body is turned 3/4, her head faces forward and turns a little toward the
+  cursor, and her eyes follow it. the model section of the panel sets her levels and light.
 - message box: `{message-box}` is a text box with a send arrow. enter sends. the intro's
   "you can tell me something" opens `content/windows/tell.md`, a popup with just this box.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last

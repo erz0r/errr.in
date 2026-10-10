@@ -7,10 +7,13 @@
     "build": "node dev/build.js",
     "preview": "node dev/preview.js",
     "deploy": "node dev/build.js && node dev/deploy.js",
-    "messages": "node dev/messages.js"
+    "messages": "node dev/messages.js",
+    "vendor": "node dev/vendor.js"
   },
   "devDependencies": {
+    "esbuild": "^0.28.2",
     "marked": "^18.1.0",
-    "marked-footnote": "^1.4.0"
+    "marked-footnote": "^1.4.0",
+    "three": "^0.186.1"
   }
 }
