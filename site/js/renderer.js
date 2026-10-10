@@ -67,6 +67,20 @@ void main() {
   gl_FragColor = vec4((clamp(vec3(at(c), slope), -1.0, 1.0) * 127.0 + 128.0) / 255.0, 1.0);
 }`;
 
+  const LIFE_STEP = `
+precision highp float;
+uniform sampler2D uState;
+uniform vec2 uGrid;
+float at(vec2 c) { return step(0.5, texture2D(uState, fract(c / uGrid)).r); }
+void main() {
+  vec2 c = gl_FragCoord.xy;
+  float n = at(c + vec2(-1.0, -1.0)) + at(c + vec2(0.0, -1.0)) + at(c + vec2(1.0, -1.0))
+    + at(c + vec2(-1.0, 0.0)) + at(c + vec2(1.0, 0.0))
+    + at(c + vec2(-1.0, 1.0)) + at(c + vec2(0.0, 1.0)) + at(c + vec2(1.0, 1.0));
+  float alive = (n == 3.0 || (n == 2.0 && at(c) > 0.5)) ? 1.0 : 0.0;
+  gl_FragColor = vec4(alive, 0.0, 0.0, 1.0);
+}`;
+
   const MAIN = (max) => `
 precision highp float;
 #define MAX ${max}
@@ -86,6 +100,9 @@ uniform float uModelPacked;
 uniform vec3 uModelPanel;
 uniform vec3 uModelLevels;
 uniform float uDither, uDitherLevels, uDitherScale, uDitherSpread, uDitherPattern;
+uniform float uLife;
+uniform sampler2D uLifeState;
+uniform vec2 uLifeGrid;
 uniform int uCount;
 uniform float uFeather, uBlur, uHaloSize, uHaloGlow, uStackGlow, uOverlay;
 uniform float uBg, uInk, uMapOn;
@@ -223,7 +240,12 @@ float fadeAt(float a, vec2 p, vec4 rect, vec4 pattern) {
 }
 
 void main() {
-  vec2 p = vec2(gl_FragCoord.x, uSize.y * uScale - gl_FragCoord.y) / uScale;
+  // uLife: 0 plain, 1 the background's dither cells come from the game of life, 2 write which cells start alive.
+  // when writing, each fragment is one dither cell, drawn at the cell's center.
+  float cellPx = max(uDitherScale, 1.0) * uScale;
+  vec2 fc = uLife > 1.5 ? (floor(gl_FragCoord.xy) + 0.5) * cellPx : gl_FragCoord.xy;
+  vec2 p = vec2(fc.x, uSize.y * uScale - fc.y) / uScale;
+  bool covered = false;
   vec4 water = (texture2D(uSurface, vec2(p.x, uLiquidSize.y - p.y) / uLiquidSize) * 255.0 - 128.0) / 127.0;
   p += vec2(water.y, -water.z) * uRefract;
   float e = uHaloSize * 0.6, s = max(uHaloSize, 0.5), reach = e + 3.0 * s;
@@ -267,6 +289,7 @@ void main() {
       shade *= 1.0 - halo[i] * glow;
       float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
       if (popup ? sd < 0.0 : inRect > 0.5) {
+        covered = true;
         // only pixels inside a window read its textures
         vec2 uv = mix(uArea[i].xy, uArea[i].zw, clamp(d / size, 0.0, 1.0));
         vec4 t = texture2D(uText, uv) * inRect, ts = texture2D(uTextSoft, uv) * inRect;
@@ -317,7 +340,20 @@ void main() {
   }
 
   g = clamp(g + water.x * uLight, 0.0, 1.0);
-  if (uDither > 0.0) g = mix(g, quantize(g, threshold(floor(gl_FragCoord.xy / (max(uDitherScale, 1.0) * uScale)))), uDither);
+  vec2 cell = floor(fc / cellPx);
+  bool life = uLife > 0.5 && !covered;
+  float dither = life && uDither <= 0.0 ? 1.0 : uDither;
+  if (dither > 0.0) {
+    float q = quantize(g, threshold(cell));
+    if (life) {
+      // a dither cell is alive when it rounds up a tone; dead ones round down
+      float steps = max(uDitherLevels - 1.0, 1.0), below = floor(g * steps) / steps;
+      if (uLife > 1.5) { gl_FragColor = vec4(step(below + 0.5 / steps, q), 0.0, 0.0, 1.0); return; }
+      q = min(below + step(0.5, texture2D(uLifeState, (cell + 0.5) / uLifeGrid).r) / steps, 1.0);
+    }
+    g = mix(g, q, dither);
+  }
+  if (uLife > 1.5) { gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0); return; }
   vec3 color = uMapOn > 0.5 ? texture2D(uRamp, vec2((g * 255.0 + 0.5) / 256.0, 0.5)).rgb : vec3(g);
   if (uMapOn > 0.5) color = mix(color, uInkColor, ink * uInkOverride);
   if (uMapOn > 0.5) color = mix(color, texture2D(uRamp, vec2((uShadowGray * 255.0 + 0.5) / 256.0, 0.5)).rgb, shade);
@@ -326,8 +362,9 @@ void main() {
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uModelRect', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uModelRect', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight', 'uLife', 'uLifeState', 'uLifeGrid'];
   const LOOP_GAP = 16;
+  const LIFE_UNIT = 8;
   const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5, uModel: 6, uModelShadow: 7 };
 
   let gl = null;
@@ -337,7 +374,7 @@ void main() {
   let rampTex = null;
   let atlas = null;
   let atlasDirty = true;
-  let stepProgram = null, surfaceProgram = null;
+  let stepProgram = null, surfaceProgram = null, lifeProgram = null;
   const model = { tex: null, shadow: null, spot: null, panel: null };
   let liquid = null;
   let stillWater = null;
@@ -403,6 +440,9 @@ void main() {
       blurProgram = compile(BLUR, ['uSrc', 'uSize', 'uDir', 'uSigma']);
       stepProgram = compile(LIQUID_STEP, ['uState', 'uGrid', 'uDamping', 'uDrops']);
       surfaceProgram = compile(LIQUID_SURFACE, ['uState', 'uGrid']);
+      lifeProgram = compile(LIFE_STEP, ['uState', 'uGrid']);
+      if (gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) > LIFE_UNIT) UNITS.uLifeState = LIFE_UNIT;
+      life = null;
       stillWater = newTexture(1, 1, new Uint8Array([128, 128, 128, 255]));
       liquid = null;
       main = null;
@@ -788,6 +828,99 @@ void main() {
     wake();
   });
 
+  // easter egg: three quick clicks or taps on the background turn its dither dots into conway's game of life,
+  // and three more turn it back. windows keep their own dithering; the game runs on under them too.
+  const GENERATIONS_PER_SECOND = 15;
+  let life = null;
+  const lifeCell = () => Math.max(settings.ditherScale, 1) * (scaleParam || devicePixelRatio);
+  function startLife() {
+    const box = stage.getBoundingClientRect(), cellPx = lifeCell();
+    const [cols, rows] = [Math.ceil(box.width * (scaleParam || devicePixelRatio) / cellPx), Math.ceil(box.height * (scaleParam || devicePixelRatio) / cellPx)];
+    const state = [0, 1].map(() => newTexture(cols, rows, null, gl.NEAREST));
+    const fbs = state.map((tex) => {
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      return fb;
+    });
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    life = { cols, rows, state, fbs, read: 0, size: `${box.width}x${box.height}x${cellPx}`, last: performance.now(), owed: 0, checked: performance.now() };
+    // the first generation is the dither pattern as it is now
+    render(null, { seed: true });
+    topUp(true);
+    requestAnimationFrame(stepLife);
+  }
+  function stopLife() {
+    if (!life) return;
+    life.state.forEach((tex) => gl.deleteTexture(tex));
+    life.fbs.forEach((fb) => gl.deleteFramebuffer(fb));
+    life = null;
+    requestRender();
+  }
+  // a nearly empty background (or one that has died out) gets a few patches of random soup
+  function topUp(first) {
+    const { cols, rows } = life;
+    const cells = new Uint8Array(cols * rows * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, life.fbs[life.read]);
+    gl.readPixels(0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, cells);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    let alive = 0;
+    for (let i = 0; i < cells.length; i += 4) alive += cells[i] > 127;
+    if (first) life.open = cells.map((v, i) => (i % 4 === 1 ? v : 0)).filter((_, i) => i % 4 === 1);
+    if (alive > cols * rows * 0.002) return;
+    const free = [];
+    for (let i = 0; i < cols * rows; i++) if (!life.open[i]) free.push(i);
+    if (!free.length) return;
+    const SOUP = 14;
+    for (let patch = 0; patch < 6; patch++) {
+      const at = free[Math.floor(Math.random() * free.length)];
+      const [cx, cy] = [at % cols, Math.floor(at / cols)];
+      for (let y = 0; y < SOUP; y++) {
+        for (let x = 0; x < SOUP; x++) {
+          const i = ((cy + y) % rows) * cols + ((cx + x) % cols);
+          if (Math.random() < 0.4) cells[i * 4] = 255;
+        }
+      }
+    }
+    gl.bindTexture(gl.TEXTURE_2D, life.state[life.read]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, cells);
+  }
+  function stepLife(now) {
+    if (!life || !gl || gl.isContextLost()) return;
+    const box = stage.getBoundingClientRect();
+    if (`${box.width}x${box.height}x${lifeCell()}` !== life.size) return stopLife();
+    life.owed = Math.min(life.owed + now - life.last, 4000 / GENERATIONS_PER_SECOND);
+    life.last = now;
+    let stepped = false;
+    for (; life.owed >= 1000 / GENERATIONS_PER_SECOND; life.owed -= 1000 / GENERATIONS_PER_SECOND) {
+      const [from, to] = [life.read, 1 - life.read];
+      gl.bindFramebuffer(gl.FRAMEBUFFER, life.fbs[to]);
+      gl.viewport(0, 0, life.cols, life.rows);
+      gl.useProgram(lifeProgram.program);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, life.state[from]);
+      gl.uniform1i(lifeProgram.uniform.uState, 0);
+      gl.uniform2f(lifeProgram.uniform.uGrid, life.cols, life.rows);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      life.read = to;
+      stepped = true;
+    }
+    if (now - life.checked > 3000) { life.checked = now; topUp(false); }
+    if (stepped) requestRender();
+    requestAnimationFrame(stepLife);
+  }
+
+  let taps = [];
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.win:not([data-shape])') || !gl || !UNITS.uLifeState) return;
+    taps = [...taps.filter((t) => e.timeStamp - t.at < 600 && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 40), { at: e.timeStamp, x: e.clientX, y: e.clientY }];
+    if (taps.length < 3) return;
+    taps = [];
+    if (life) stopLife();
+    else startLife();
+  });
+
   // everything that changes the picture asks for a frame here, so it's drawn at most once per display frame.
   // a region (stage px) redraws only that box, if nothing else asked for the whole page.
   let queued = null, scheduled = false, fullSize = '';
@@ -804,9 +937,9 @@ void main() {
   }
   const unite = (a, b) => ({ x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) });
 
-  function render(region = null) {
+  function render(region = null, { seed = false } = {}) {
     if (!gl || gl.isContextLost()) return;
-    if (!region) queued = null;
+    if (!region && !seed) queued = null;
     const box = stage.getBoundingClientRect();
     const wins = [...stage.children].filter((el) => el.classList.contains('win') && !el.hidden);
     buildMain(wins.length);
@@ -820,7 +953,10 @@ void main() {
     if (canvas.width !== w || canvas.height !== h) [canvas.width, canvas.height] = [w, h];
     gl.viewport(0, 0, w, h);
     const size = `${w}x${h}`;
-    if (region && size === fullSize) {
+    if (seed) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, life.fbs[life.read]);
+      gl.viewport(0, 0, life.cols, life.rows);
+    } else if (region && size === fullSize) {
       const [x0, y0] = [Math.max(0, Math.floor(region.x0 * scale) - 2), Math.max(0, Math.floor(region.y0 * scale) - 2)];
       const [x1, y1] = [Math.min(w, Math.ceil(region.x1 * scale) + 2), Math.min(h, Math.ceil(region.y1 * scale) + 2)];
       if (x1 <= x0 || y1 <= y0) return;
@@ -856,8 +992,10 @@ void main() {
       uSurface: liquid ? liquid.surface : stillWater,
       uModel: model.tex ?? stillWater,
       uModelShadow: model.shadow ?? stillWater,
+      uLifeState: life && !seed ? life.state[life.read] : stillWater,
     };
     for (const [name, unit] of Object.entries(UNITS)) {
+      if (!(name in textures)) continue;
       gl.activeTexture(gl.TEXTURE0 + unit);
       gl.bindTexture(gl.TEXTURE_2D, textures[name]);
     }
@@ -901,8 +1039,11 @@ void main() {
     gl.uniform2f(u.uLiquidSize, liquid ? liquid.cols * CELL : 1, liquid ? liquid.rows * CELL : 1);
     gl.uniform1f(u.uRefract, settings.refract);
     gl.uniform1f(u.uLight, settings.light);
+    gl.uniform1f(u.uLife, seed ? 2 : life ? 1 : 0);
+    gl.uniform2f(u.uLifeGrid, life?.cols ?? 1, life?.rows ?? 1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.SCISSOR_TEST);
+    if (seed) gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
   const resizes = new ResizeObserver((entries) => {
