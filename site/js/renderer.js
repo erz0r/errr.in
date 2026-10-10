@@ -148,6 +148,9 @@ float quantize(float v, float t) {
   return clamp(floor(v * steps + mix(0.5, t, uDitherSpread)) / steps, 0.0, 1.0);
 }
 
+bool isPopup(vec4 f) { return mod(floor(f.w / 2.0), 2.0) > 0.5; }
+bool isArt(vec4 f) { return f.w > 3.5; }
+
 float sdRoundBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
@@ -221,13 +224,15 @@ void main() {
   float halo[MAX], alpha[MAX];
   float g = 0.0;
   float ink = 0.0;
+  vec3 art = vec3(0.0);
+  float artA = 0.0;
 
   for (int i = 0; i < MAX; i++) {
     halo[i] = 0.0;
     vec4 r = uRect[i];
     alpha[i] = i < uCount ? fadeAt(uAlpha[i], p, r, uFade[i]) : 0.0;
     if (i < uCount && p.x > r.x - reach && p.x < r.z + reach && p.y > r.y - reach && p.y < r.w + reach) {
-      if (uFade[i].w > 1.5) {
+      if (isPopup(uFade[i])) {
         float hs = min(s, 8.0);
         halo[i] = alpha[i] * uHaloGlow * bubbleEdge(p, r, 0.6 * hs, hs);
       } else {
@@ -245,17 +250,21 @@ void main() {
     vec4 m = texture2D(uMedia, uv), ms = texture2D(uMediaSoft, uv);
     if (i < uCount) {
       float glow = uStackGlow, feather = uFeather, sd = 0.0;
-      bool popup = uFade[i].w > 1.5;
+      bool popup = isPopup(uFade[i]);
       if (popup) {
         feather = mix(20.0, min(uFeather, 4.0), tailTaper(p, r, 8.0, 44.0));
         sd = bubble(p, r);
         float clear = alpha[i] * bubbleEdge(p, r, uPortalReach, max(uPortalBlur, 0.5));
         g *= 1.0 - clear;
         ink *= 1.0 - clear;
+        art *= 1.0 - clear;
+        artA *= 1.0 - clear;
         glow = 1.0;
       }
       g += (1.0 - g) * halo[i] * glow;
       ink *= 1.0 - halo[i] * glow;
+      art *= 1.0 - halo[i] * glow;
+      artA *= 1.0 - halo[i] * glow;
       float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
       if (popup ? sd < 0.0 : inRect > 0.5) {
         t *= inRect; ts *= inRect; m *= inRect; ms *= inRect;
@@ -265,13 +274,25 @@ void main() {
         float soft = cover * uBg + dot(ms.rgb, GRAY) - ms.a * uBg + ts.r * (uInk - uBg);
         g = g * (1.0 - cover * fade) + soft * fade;
         ink *= 1.0 - cover * fade;
+        art *= 1.0 - cover * fade;
+        artA *= 1.0 - cover * fade;
         float sharp = (popup ? clamp(-sd / max(2.0 * feather, 0.5), 0.0, 1.0) * tip : cssFade(d.x, size.x, 2.0 * feather) * cssFade(d.y, size.y, 2.0 * feather)) * alpha[i];
+        if (isArt(uFade[i])) sharp = max(sharp, m.a * alpha[i]);
         float content = uBg * (1.0 - m.a) + dot(m.rgb, GRAY);
         content = mix(content, uInk, t.r);
         g = mix(g, content, sharp);
         ink = mix(ink, t.r, sharp);
+        if (isArt(uFade[i])) {
+          art = mix(art, m.rgb, sharp);
+          artA = mix(artA, m.a, sharp);
+        } else {
+          art *= 1.0 - sharp;
+          artA *= 1.0 - sharp;
+        }
         g = mix(g, uInk, t.r * uOverlay * alpha[i]);
         ink = mix(ink, 1.0, t.r * uOverlay * alpha[i]);
+        art *= 1.0 - t.r * uOverlay * alpha[i];
+        artA *= 1.0 - t.r * uOverlay * alpha[i];
       }
     }
   }
@@ -280,6 +301,7 @@ void main() {
   if (uDither > 0.0) g = mix(g, quantize(g, threshold(floor(gl_FragCoord.xy / (max(uDitherScale, 1.0) * uScale)))), uDither);
   vec3 color = uMapOn > 0.5 ? texture2D(uRamp, vec2((g * 255.0 + 0.5) / 256.0, 0.5)).rgb : vec3(g);
   if (uMapOn > 0.5) color = mix(color, uInkColor, ink * uInkOverride);
+  color = color * (1.0 - artA) + art;
   gl_FragColor = vec4(color, 1.0);
 }`;
 
@@ -766,6 +788,7 @@ void main() {
       areas.set(atlas.areas.get(win) ?? [0, 0, 0, 0], i * 4);
       alphas[i] = win.style.opacity === '' ? 1 : Number(win.style.opacity);
       if (win.dataset.fadeSeed) patterns.set(win.dataset.fadeSeed.split(',').map(Number), i * 4);
+      if (win.hasAttribute('data-art')) patterns[i * 4 + 3] += 4;
       if (win.hasAttribute('data-popup')) {
         patterns[i * 4 + 3] += 2;
         const [tx, ty, b0, b1] = (win.dataset.tail ?? '').split(',').map(Number);

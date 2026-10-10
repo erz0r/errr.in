@@ -106,6 +106,7 @@ function windowHtml({ name, settings, title, html, headings }) {
     + (settings.place ? ` data-place="${escape(settings.place)}"` : '')
     + (settings.width === 'fit' ? ' data-fit' : '')
     + (settings.popup ? ' data-popup' : '')
+    + (settings.art ? ' data-art' : '')
     + (headings.length ? ` data-headings="${escape(JSON.stringify(headings))}"` : '')
     + ` aria-label="${escape(title)}" tabindex="-1"`
     + (style ? ` style="${style}"` : '')

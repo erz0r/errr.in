@@ -40,6 +40,13 @@ html:has(body:not(.writeup)), body:not(.writeup) { height: 100%; overflow: hidde
 .txt > :first-child { padding-right: 28px; }
 .txt :is(p, ul, ol) + :is(p, ul, ol) { margin-top: 0.75em; }
 .txt :is(ul, ol) { padding-left: 1.2em; }
+.txt h3 { margin: 1.1em 0 0.3em; font-size: 15px; font-weight: 600; line-height: inherit; }
+.txt :is(h1, h2) + h3 { margin-top: 0.6em; }
+.txt li + li { margin-top: 0.2em; }
+.win[data-art] .txt { padding: 34px 16px 16px; }
+.win[data-art] .txt > :first-child { padding-right: 0; }
+.win[data-art] .back { top: 7px; right: 10px; }
+.win[data-art] img { width: auto; height: auto; max-width: min(100%, 84vw, 800px); max-height: min(72vh, 640px); }
 .win a { color: inherit; }
 .win img { display: block; max-width: 100%; }
 .icon { display: inline-block; width: 1em; height: 1em; margin-right: 0.35em; vertical-align: -0.15em; fill: currentColor; }
