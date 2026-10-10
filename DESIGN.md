@@ -172,6 +172,9 @@ exposed directly and cloudflare handles https.
   `~/docker/errrin/inbox.env` on momoka, never in the repo. nginx allows about 3 messages a
   minute per visitor. `npm run messages` shows them all.
 - cloudflare web analytics is allowed by the security policy, for visitor stats.
+- www.errr.in redirects to errr.in. the main site is nginx's default server, so any other
+  host name gets the site rather than the redirect.
+- the build also writes `robots.txt` and `sitemap.xml` (the home page and each writeup).
 - every script and stylesheet address carries a version made from its contents
   (`/js/window.js?v=...`), so a deploy is picked up right away even though cloudflare tells
   browsers to keep those files for 4 hours.
@@ -187,6 +190,3 @@ measured on an iphone (ios 18.7) with windows moving constantly:
 | 1 | 22 fps | 60 fps |
 | 3 | 7 fps | 60 fps |
 | 6 | 3 fps | 60 fps |
-
-`dev/bench.js` is an older desktop benchmark from before webgl and needs updating before
-it's useful again.
