@@ -335,6 +335,17 @@ function perfControls() {
   return [row, out];
 }
 
+function choiceRow(key, options) {
+  const row = el('div', 'row');
+  for (const option of options) {
+    const button = el('button', '', option);
+    button.onclick = () => { current[key] = option; changed(); };
+    refreshers.push(() => button.classList.toggle('on', current[key] === option));
+    row.append(button);
+  }
+  return row;
+}
+
 function layoutPicker() {
   const row = el('div', 'row');
   for (const layout of ['swap', 'pack', 'stack']) {
@@ -473,6 +484,14 @@ floatingWindow('tune', 'tune   ` to hide', [
     slider('popup fade blur', () => current, 'portalBlur', 0, 40, 0.5, 'px'),
     slider('spacing', () => current, 'windowPush', 0, 2, 0.05),
     el('div', 'hint', 'swap: one window at a time · pack: around the focused one (spacing 1 = glows just clear) · stack: offset'),
+  ),
+  ...section('dither (experiment)',
+    slider('amount', () => current, 'ditherAmount', 0, 1, 0.01),
+    slider('levels', () => current, 'ditherLevels', 2, 32, 1),
+    slider('pixel size', () => current, 'ditherScale', 1, 8, 0.5, 'px'),
+    slider('spread', () => current, 'ditherSpread', 0, 1, 0.01),
+    choiceRow('ditherPattern', ['bayer2', 'bayer4', 'bayer8', 'noise', 'lines', 'diagonal']),
+    el('div', 'hint', 'amount 0 is off. dithers the gray image under the gradient map, so only palette colors show'),
   ),
   ...section('test windows', ...windowControls()),
   ...section('perf test', ...perfControls()),

@@ -93,6 +93,11 @@ export function cssVars(s) {
   --fade-scale: ${s.fadeScale};
   --portal-reach: ${s.portalReach};
   --portal-blur: ${s.portalBlur};
+  --dither-amount: ${s.ditherAmount};
+  --dither-levels: ${s.ditherLevels};
+  --dither-scale: ${s.ditherScale};
+  --dither-spread: ${s.ditherSpread};
+  --dither-pattern: ${s.ditherPattern};
   --window-layout: ${s.windowLayout};
   --bg-gray: ${+bg.toFixed(4)};
 ${palette}
@@ -116,11 +121,16 @@ const RANGES = {
   fadeScale: [40, 1000, 320],
   portalReach: [0, 120, 18],
   portalBlur: [0, 40, 4],
+  ditherAmount: [0, 1, 0],
+  ditherLevels: [2, 32, 4],
+  ditherScale: [1, 8, 2],
+  ditherSpread: [0, 1, 1],
   minContrast: [1, 12, 4.5],
   windowPush: [0, 2, 1],
 };
 const CHOICES = {
   windowLayout: [['swap', 'pack', 'stack'], 'swap'],
+  ditherPattern: [['bayer2', 'bayer4', 'bayer8', 'noise', 'lines', 'diagonal'], 'bayer4'],
 };
 const HEX = /^#[0-9a-f]{6}$/i;
 

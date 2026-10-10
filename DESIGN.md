@@ -144,6 +144,9 @@ it.
 - apply changes to all presets copies just the settings you changed since the last load
   or save into every preset. it asks first and lists them.
 - a palette editor and a palette generator (an oklch ramp, or cubehelix after dave green).
+- dither (experiment, off unless amount is above 0): dithers the gray image under the
+  gradient map, so only palette colors show. levels, pixel size, spread and a pattern (bayer
+  2/4/8, noise, lines, diagonal) are tunable and saved with presets.
 - test windows, and a performance test that reports to the dev server's terminal.
 - ctrl+s saves to `settings.json`.
 

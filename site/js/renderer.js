@@ -78,6 +78,7 @@ uniform float uAlpha[MAX];
 uniform vec4 uFade[MAX];
 uniform float uSpread, uNoiseScale, uPortalReach, uPortalBlur;
 uniform vec4 uTail;
+uniform float uDither, uDitherLevels, uDitherScale, uDitherSpread, uDitherPattern;
 uniform int uCount;
 uniform float uFeather, uBlur, uHaloSize, uHaloGlow, uStackGlow, uOverlay;
 uniform float uBg, uInk, uMapOn;
@@ -126,6 +127,25 @@ float roundedBlur(vec2 lo, vec2 hi, vec2 p, float s, float corner) {
     y += stepY;
   }
   return v;
+}
+
+float bayer2(vec2 a) {
+  a = floor(a);
+  return fract(a.x / 2.0 + a.y * a.y * 0.75);
+}
+float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+float bayer8(vec2 a) { return bayer4(0.5 * a) * 0.25 + bayer2(a); }
+float threshold(vec2 cell) {
+  if (uDitherPattern < 0.5) return bayer2(cell);
+  if (uDitherPattern < 1.5) return bayer4(cell);
+  if (uDitherPattern < 2.5) return bayer8(cell);
+  if (uDitherPattern < 3.5) return fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+  if (uDitherPattern < 4.5) return mod(cell.y, 4.0) / 4.0;
+  return mod(cell.x + cell.y, 4.0) / 4.0;
+}
+float quantize(float v, float t) {
+  float steps = max(uDitherLevels - 1.0, 1.0);
+  return clamp(floor(v * steps + mix(0.5, t, uDitherSpread)) / steps, 0.0, 1.0);
 }
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
@@ -257,6 +277,7 @@ void main() {
   }
 
   g = clamp(g + water.x * uLight, 0.0, 1.0);
+  if (uDither > 0.0) g = mix(g, quantize(g, threshold(floor(gl_FragCoord.xy / (max(uDitherScale, 1.0) * uScale)))), uDither);
   vec3 color = uMapOn > 0.5 ? texture2D(uRamp, vec2((g * 255.0 + 0.5) / 256.0, 0.5)).rgb : vec3(g);
   if (uMapOn > 0.5) color = mix(color, uInkColor, ink * uInkOverride);
   gl_FragColor = vec4(color, 1.0);
@@ -264,7 +285,7 @@ void main() {
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
   const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5 };
 
   let gl = null;
@@ -335,7 +356,7 @@ void main() {
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-      maxCapacity = Math.min(64, Math.floor((gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) - 12) / 4));
+      maxCapacity = Math.min(64, Math.floor((gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) - 16) / 4));
       blurProgram = compile(BLUR, ['uSrc', 'uSize', 'uDir', 'uSigma']);
       stepProgram = compile(LIQUID_STEP, ['uState', 'uGrid', 'uDamping', 'uDrops']);
       surfaceProgram = compile(LIQUID_SURFACE, ['uState', 'uGrid']);
@@ -367,6 +388,9 @@ void main() {
       inkColor: css.getPropertyValue('--ink-color').trim().split(/\s+/).map(Number), inkOverride: num('--ink-override'),
       spread: num('--fade-spread'), noiseScale: num('--fade-scale') || 320,
       portalReach: num('--portal-reach'), portalBlur: num('--portal-blur'),
+      dither: num('--dither-amount') || 0, ditherLevels: num('--dither-levels') || 4, ditherScale: num('--dither-scale') || 2,
+      ditherSpread: num('--dither-spread'),
+      ditherPattern: Math.max(0, ['bayer2', 'bayer4', 'bayer8', 'noise', 'lines', 'diagonal'].indexOf(css.getPropertyValue('--dither-pattern').trim())),
       refract: num('--liquid-refract'), light: num('--liquid-light'), damping: num('--liquid-damping'),
       click: num('--liquid-click'), splash: num('--liquid-size'),
     };
@@ -770,6 +794,11 @@ void main() {
     gl.uniform1f(u.uPortalReach, settings.portalReach);
     gl.uniform1f(u.uPortalBlur, settings.portalBlur);
     gl.uniform4fv(u.uTail, tail);
+    gl.uniform1f(u.uDither, settings.dither);
+    gl.uniform1f(u.uDitherLevels, settings.ditherLevels);
+    gl.uniform1f(u.uDitherScale, settings.ditherScale);
+    gl.uniform1f(u.uDitherSpread, Number.isNaN(settings.ditherSpread) ? 1 : settings.ditherSpread);
+    gl.uniform1f(u.uDitherPattern, settings.ditherPattern);
     gl.uniform1i(u.uCount, drawn.length);
     gl.uniform1f(u.uFeather, settings.feather);
     gl.uniform1f(u.uBlur, settings.blur);
