@@ -121,7 +121,8 @@ in a 256-color ramp made from the palette.
   windows, which keep their own dithering, so the game shows on the bare page and fades out under
   the glows. it runs on underneath the windows too, so things wander behind a window and come out
   the other side. if the page has (almost) no live cells, at the start or later, it gets a few
-  patches of random soup. 15 generations a second, on a torus.
+  patches of random soup. 15 generations a second, on a torus. it fades in and out across the whole
+  page through the same noise and sweep as a window's fade, over twice the window fade time.
 - clicking drops a ripple that spreads across the page. it is turned off for reduced
   motion.
 - without webgl or javascript, css draws plain windows in the palette's colors.

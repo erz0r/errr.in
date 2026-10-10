@@ -100,7 +100,8 @@ uniform float uModelPacked;
 uniform vec3 uModelPanel;
 uniform vec3 uModelLevels;
 uniform float uDither, uDitherLevels, uDitherScale, uDitherSpread, uDitherPattern;
-uniform float uLife;
+uniform float uLife, uLifeAlpha;
+uniform vec4 uLifeFade;
 uniform sampler2D uLifeState;
 uniform vec2 uLifeGrid;
 uniform int uCount;
@@ -253,7 +254,10 @@ void main() {
   float e = uHaloSize * 0.6, s = max(uHaloSize, 0.5), reach = e + 3.0 * s;
   float halo[MAX], alpha[MAX];
   // with the game of life on, live cells sit on the page a tone up, under the halos and windows
-  float g = uLife > 0.5 && uLife < 1.5 ? step(0.5, texture2D(uLifeState, (cell + 0.5) / uLifeGrid).r) / steps : 0.0;
+  // it fades in and out across the page through the same noise as the windows' fades
+  float g = uLife > 0.5 && uLife < 1.5
+    ? step(0.5, texture2D(uLifeState, (cell + 0.5) / uLifeGrid).r) / steps * fadeAt(uLifeAlpha, p, vec4(0.0, 0.0, uSize), uLifeFade)
+    : 0.0;
   float ink = 0.0;
   float shade = 0.0;
 
@@ -358,7 +362,7 @@ void main() {
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uModelRect', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight', 'uLife', 'uLifeState', 'uLifeGrid'];
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uModelRect', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight', 'uLife', 'uLifeState', 'uLifeGrid', 'uLifeAlpha', 'uLifeFade'];
   const LOOP_GAP = 16;
   const LIFE_UNIT = 8;
   const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5, uModel: 6, uModelShadow: 7 };
@@ -844,7 +848,18 @@ void main() {
     // the first generation is the dither pattern as it is now
     render(null, { seed: true });
     topUp(true);
+    fadeLife(1);
     requestAnimationFrame(stepLife);
+  }
+  // like a window's fade (window.js): a new noise pattern and sweep each time, run backwards on the way out
+  function fadeLife(to) {
+    const now = performance.now(), from = life.fade ? lifeAlpha(now) : 0;
+    const ms = reducedMotion.matches ? 0 : 2 * (parseFloat(getComputedStyle(root).getPropertyValue('--fade-ms')) || 550) * Math.abs(to - from);
+    life.fade = { from, to, start: now, ms, pattern: [Math.random() * 4096, Math.random() * 4096, Math.random() * Math.PI * 2, to < from ? 1 : 0] };
+  }
+  function lifeAlpha(now) {
+    const { from, to, start, ms } = life.fade;
+    return ms ? from + (to - from) * Math.min(1, Math.max(0, (now - start) / ms)) : to;
   }
   function stopLife() {
     if (!life) return;
@@ -903,7 +918,10 @@ void main() {
       stepped = true;
     }
     if (now - life.checked > 3000) { life.checked = now; topUp(false); }
-    if (stepped) requestRender();
+    const alpha = lifeAlpha(now), fading = alpha !== life.fade.to;
+    if (!fading && life.fade.to === 0) return stopLife();
+    if (stepped || fading || alpha !== life.drawnAlpha) requestRender();
+    life.drawnAlpha = alpha;
     requestAnimationFrame(stepLife);
   }
 
@@ -913,8 +931,8 @@ void main() {
     taps = [...taps.filter((t) => e.timeStamp - t.at < 600 && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 40), { at: e.timeStamp, x: e.clientX, y: e.clientY }];
     if (taps.length < 3) return;
     taps = [];
-    if (life) stopLife();
-    else startLife();
+    if (!life) startLife();
+    else fadeLife(life.fade.to ? 0 : 1);
   });
 
   // everything that changes the picture asks for a frame here, so it's drawn at most once per display frame.
@@ -1036,6 +1054,8 @@ void main() {
     gl.uniform1f(u.uRefract, settings.refract);
     gl.uniform1f(u.uLight, settings.light);
     gl.uniform1f(u.uLife, seed ? 2 : life ? 1 : 0);
+    gl.uniform1f(u.uLifeAlpha, life?.fade ? lifeAlpha(performance.now()) : 0);
+    gl.uniform4fv(u.uLifeFade, life?.fade?.pattern ?? [0, 0, 0, 0]);
     gl.uniform2f(u.uLifeGrid, life?.cols ?? 1, life?.rows ?? 1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.SCISSOR_TEST);
