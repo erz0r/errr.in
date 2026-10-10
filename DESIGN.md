@@ -163,6 +163,9 @@ exposed directly and cloudflare handles https.
   `~/docker/errrin/inbox.env` on momoka, never in the repo. nginx allows about 3 messages a
   minute per visitor. `npm run messages` shows them all.
 - cloudflare web analytics is allowed by the security policy, for visitor stats.
+- every script and stylesheet address carries a version made from its contents
+  (`/js/window.js?v=...`), so a deploy is picked up right away even though cloudflare tells
+  browsers to keep those files for 4 hours.
 - to deploy: `npm run deploy`. it builds, copies the
   site over ssh and swaps it in at once. the previous version stays in `site.old`.
 
