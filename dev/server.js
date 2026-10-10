@@ -27,6 +27,8 @@ const TYPES = {
   '.webp': 'image/webp',
   '.avif': 'image/avif',
   '.woff2': 'font/woff2',
+  '.glb': 'model/gltf-binary',
+  '.mp4': 'video/mp4',
 };
 
 const loadSettings = async () => validate(JSON.parse(await readFile(SETTINGS, 'utf8')));
@@ -112,6 +114,14 @@ createServer(async (req, res) => {
     if (!content) return send(404, await render(await renderRoute('/404.html')), TYPES['.html']);
     if (extname(file) === '.html') {
       return send(200, await render(content.toString()), type);
+    }
+    // safari only plays video from servers that answer byte ranges
+    const range = req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
+    if (range) {
+      const start = range[1] ? Number(range[1]) : Math.max(0, content.length - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), content.length - 1) : content.length - 1;
+      res.writeHead(206, { 'Content-Type': type, 'Content-Range': `bytes ${start}-${end}/${content.length}`, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' });
+      return res.end(content.subarray(start, end + 1));
     }
     return send(200, content, type);
   } catch (err) {

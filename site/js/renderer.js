@@ -82,6 +82,8 @@ uniform sampler2D uModel, uModelShadow;
 uniform float uShadowGray;
 uniform vec4 uModelRect;
 uniform float uModelWin;
+uniform float uModelPacked;
+uniform vec3 uModelPanel;
 uniform vec3 uModelLevels;
 uniform float uDither, uDitherLevels, uDitherScale, uDitherSpread, uDitherPattern;
 uniform int uCount;
@@ -229,12 +231,6 @@ void main() {
   float g = 0.0;
   float ink = 0.0;
   float shade = 0.0;
-  vec2 mu = (p - uModelRect.xy) / max(uModelRect.zw - uModelRect.xy, vec2(1.0));
-  vec4 mm = texture2D(uModel, clamp(mu, 0.0, 1.0));
-  float sa = texture2D(uModelShadow, clamp(mu, 0.0, 1.0)).a * step(0.0, mu.x) * step(mu.x, 1.0) * step(0.0, mu.y) * step(mu.y, 1.0);
-  mm *= step(0.0, mu.x) * step(mu.x, 1.0) * step(0.0, mu.y) * step(mu.y, 1.0);
-  float mg = mm.a > 0.001 ? dot(mm.rgb / mm.a, GRAY) : 0.0;
-  mg = pow(clamp((mg - uModelLevels.x) / max(uModelLevels.y - uModelLevels.x, 0.001), 0.0, 1.0), 1.0 / max(uModelLevels.z, 0.01));
 
   for (int i = 0; i < MAX; i++) {
     halo[i] = 0.0;
@@ -254,9 +250,6 @@ void main() {
   for (int i = 0; i < MAX; i++) {
     vec4 r = uRect[i];
     vec2 size = max(r.zw - r.xy, vec2(1.0)), d = p - r.xy;
-    vec2 uv = mix(uArea[i].xy, uArea[i].zw, clamp(d / size, 0.0, 1.0));
-    vec4 t = texture2D(uText, uv), ts = texture2D(uTextSoft, uv);
-    vec4 m = texture2D(uMedia, uv), ms = texture2D(uMediaSoft, uv);
     if (i < uCount) {
       float glow = uStackGlow, feather = uFeather, sd = 0.0;
       bool popup = isPopup(uFade[i]);
@@ -274,7 +267,10 @@ void main() {
       shade *= 1.0 - halo[i] * glow;
       float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
       if (popup ? sd < 0.0 : inRect > 0.5) {
-        t *= inRect; ts *= inRect; m *= inRect; ms *= inRect;
+        // only pixels inside a window read its textures
+        vec2 uv = mix(uArea[i].xy, uArea[i].zw, clamp(d / size, 0.0, 1.0));
+        vec4 t = texture2D(uText, uv) * inRect, ts = texture2D(uTextSoft, uv) * inRect;
+        vec4 m = texture2D(uMedia, uv) * inRect, ms = texture2D(uMediaSoft, uv) * inRect;
         float tip = popup ? tailTaper(p, r, 0.0, 36.0) : 1.0;
         float fade = (popup ? clamp(-sd / max(feather, 0.5), 0.0, 1.0) * tip : cssFade(d.x, size.x, feather) * cssFade(d.y, size.y, feather)) * alpha[i];
         float cover = popup ? 1.0 : blurSpan(p.x, r.x, r.z, uBlur) * blurSpan(p.y, r.y, r.w, uBlur);
@@ -289,12 +285,29 @@ void main() {
         ink = mix(ink, t.r, sharp);
         shade *= 1.0 - sharp;
         if (abs(float(i) - uModelWin) < 0.5) {
+          vec2 mu = (p - uModelRect.xy) / max(uModelRect.zw - uModelRect.xy, vec2(1.0));
+          float inModel = step(0.0, mu.x) * step(mu.x, 1.0) * step(0.0, mu.y) * step(mu.y, 1.0);
+          vec2 mc = clamp(mu, 0.0, 1.0);
+          float ma, sa, mg;
+          if (uModelPacked > 0.5) {
+            // a baked loop frame: her gray, her alpha and the shadow's alpha, stacked top to bottom
+            vec2 cell = vec2(mc.x, clamp(mc.y, uModelPanel.z, 1.0 - uModelPanel.z) * uModelPanel.x);
+            mg = texture2D(uModel, cell).r * inModel;
+            ma = texture2D(uModel, cell + vec2(0.0, uModelPanel.y)).r * inModel;
+            sa = texture2D(uModel, cell + vec2(0.0, 2.0 * uModelPanel.y)).r * inModel;
+          } else {
+            vec4 mm = texture2D(uModel, mc) * inModel;
+            sa = texture2D(uModelShadow, mc).a * inModel;
+            ma = mm.a;
+            mg = mm.a > 0.001 ? dot(mm.rgb / mm.a, GRAY) : 0.0;
+          }
+          mg = pow(clamp((mg - uModelLevels.x) / max(uModelLevels.y - uModelLevels.x, 0.001), 0.0, 1.0), 1.0 / max(uModelLevels.z, 0.01));
           g = mix(g, uShadowGray, sa * fade);
           ink *= 1.0 - sa * fade;
           shade = mix(shade, 1.0, sa * fade);
-          g = mix(g, mg, mm.a * fade);
-          shade *= 1.0 - mm.a * fade;
-          ink *= 1.0 - mm.a * fade;
+          g = mix(g, mg, ma * fade);
+          shade *= 1.0 - ma * fade;
+          ink *= 1.0 - ma * fade;
         }
         g = mix(g, uInk, t.r * uOverlay * alpha[i]);
         ink = mix(ink, 1.0, t.r * uOverlay * alpha[i]);
@@ -313,7 +326,8 @@ void main() {
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uModelRect', 'uModelWin', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uModelRect', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight'];
+  const LOOP_GAP = 16;
   const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5, uModel: 6, uModelShadow: 7 };
 
   let gl = null;
@@ -324,7 +338,7 @@ void main() {
   let atlas = null;
   let atlasDirty = true;
   let stepProgram = null, surfaceProgram = null;
-  const model = { tex: null, shadow: null, spot: null };
+  const model = { tex: null, shadow: null, spot: null, panel: null };
   let liquid = null;
   let stillWater = null;
 
@@ -378,7 +392,7 @@ void main() {
   }
 
   function init() {
-    gl = canvas.getContext('webgl', { alpha: false, antialias: false });
+    gl = canvas.getContext('webgl', { alpha: false, antialias: false, preserveDrawingBuffer: true });
     if (!gl) return false;
     try {
       gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
@@ -757,15 +771,15 @@ void main() {
     requestAnimationFrame(tick);
   }
   function tick(now) {
-    if (!gl || gl.isContextLost() || !liquidOn()) { animating = false; dropLiquid(); render(); return; }
+    if (!gl || gl.isContextLost() || !liquidOn()) { animating = false; dropLiquid(); requestRender(); return; }
     ensureLiquid(stage.getBoundingClientRect());
     owed = Math.min(owed + now - lastTime, 4 * STEP_MS);
     lastTime = now;
     for (; owed >= STEP_MS; owed -= STEP_MS) stepLiquid();
     updateSurface();
-    render();
+    requestRender();
     if (now - lastSplash < settleMs()) requestAnimationFrame(tick);
-    else { animating = false; dropLiquid(); render(); }
+    else { animating = false; dropLiquid(); requestRender(); }
   }
 
   stage.addEventListener('pointerdown', (e) => {
@@ -774,8 +788,25 @@ void main() {
     wake();
   });
 
-  function render() {
+  // everything that changes the picture asks for a frame here, so it's drawn at most once per display frame.
+  // a region (stage px) redraws only that box, if nothing else asked for the whole page.
+  let queued = null, scheduled = false, fullSize = '';
+  function requestRender(region = null) {
+    queued = !region || queued === 'all' ? 'all' : queued ? unite(queued, region) : region;
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      const r = queued;
+      queued = null;
+      if (r) render(r === 'all' ? null : r);
+    });
+  }
+  const unite = (a, b) => ({ x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) });
+
+  function render(region = null) {
     if (!gl || gl.isContextLost()) return;
+    if (!region) queued = null;
     const box = stage.getBoundingClientRect();
     const wins = [...stage.children].filter((el) => el.classList.contains('win') && !el.hidden);
     buildMain(wins.length);
@@ -788,6 +819,16 @@ void main() {
     const [w, h] = [Math.round(box.width * scale), Math.round(box.height * scale)];
     if (canvas.width !== w || canvas.height !== h) [canvas.width, canvas.height] = [w, h];
     gl.viewport(0, 0, w, h);
+    const size = `${w}x${h}`;
+    if (region && size === fullSize) {
+      const [x0, y0] = [Math.max(0, Math.floor(region.x0 * scale) - 2), Math.max(0, Math.floor(region.y0 * scale) - 2)];
+      const [x1, y1] = [Math.min(w, Math.ceil(region.x1 * scale) + 2), Math.min(h, Math.ceil(region.y1 * scale) + 2)];
+      if (x1 <= x0 || y1 <= y0) return;
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(x0, h - y1, x1 - x0, y1 - y0);
+    } else {
+      fullSize = size;
+    }
 
     const rects = new Float32Array(main.capacity * 4), areas = new Float32Array(main.capacity * 4);
     const alphas = new Float32Array(main.capacity), patterns = new Float32Array(main.capacity * 4), tail = new Float32Array(4);
@@ -841,6 +882,8 @@ void main() {
     const mr = model.spot?.getBoundingClientRect();
     gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top, mr.right - box.left, mr.bottom - box.top] : [0, 0, 0, 0]));
     gl.uniform1f(u.uModelWin, modelWin);
+    gl.uniform1f(u.uModelPacked, model.panel ? 1 : 0);
+    gl.uniform3f(u.uModelPanel, ...(model.panel ?? [1, 0, 0]));
     gl.uniform3f(u.uModelLevels, ...settings.modelLevels);
     gl.uniform1f(u.uShadowGray, settings.shadowGray);
     gl.uniform1i(u.uCount, drawn.length);
@@ -859,6 +902,7 @@ void main() {
     gl.uniform1f(u.uRefract, settings.refract);
     gl.uniform1f(u.uLight, settings.light);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disable(gl.SCISSOR_TEST);
   }
 
   const resizes = new ResizeObserver((entries) => {
@@ -866,7 +910,7 @@ void main() {
       if (target === stage) [...rasters.keys()].forEach(forget);
       else forget(target);
     }
-    render();
+    requestRender();
   });
   new MutationObserver((records) => {
     for (const record of records) {
@@ -876,23 +920,35 @@ void main() {
       const win = el?.closest('.win');
       if (win && (!(record.type === 'attributes' && el === win) || record.attributeName === 'data-fading')) forget(win);
     }
-    render();
+    requestRender();
   }).observe(stage, {
     subtree: true, childList: true, characterData: true,
     attributes: true, attributeFilter: ['style', 'hidden', 'class', 'src', 'data-map', 'data-tail', 'data-fading'],
   });
   stage.addEventListener('scroll', (e) => {
     const win = e.target.closest?.('.win');
-    if (win) { forget(win); render(); }
+    if (win) { forget(win); requestRender(); }
   }, true);
   stage.addEventListener('load', (e) => {
     const win = e.target.closest?.('.win');
-    if (win) { forget(win); render(); }
+    if (win) { forget(win); requestRender(); }
   }, true);
-  document.fonts?.ready.then(() => { [...rasters.keys()].forEach(forget); render(); });
+  document.fonts?.ready.then(() => { [...rasters.keys()].forEach(forget); requestRender(); });
+  // her pixels only reach her box, so a new frame of her redraws just that
+  const modelBox = () => {
+    const s = stage.getBoundingClientRect(), r = model.spot.getBoundingClientRect();
+    return { x0: r.left - s.left, y0: r.top - s.top, x1: r.right - s.left, y1: r.bottom - s.top };
+  };
   addEventListener('model:frame', (e) => {
     if (!gl) return;
+    const first = !model.tex;
     model.spot = e.detail.spot;
+    const { video } = e.detail;
+    if (video) {
+      // baked loop: three panels of `panel` rows each, `gap` rows apart (dev/bake-model.js)
+      const panel = (video.videoHeight - 2 * LOOP_GAP) / 3;
+      model.panel = [panel / video.videoHeight, (panel + LOOP_GAP) / video.videoHeight, 0.5 / panel];
+    }
     const key = e.detail.layer === 'shadow' ? 'shadow' : 'tex';
     if (!model[key]) model[key] = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, model[key]);
@@ -901,8 +957,8 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, e.detail.canvas);
-    if (key === 'tex') render();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video ?? e.detail.canvas);
+    if (key === 'tex') requestRender(first ? null : modelBox());
   });
   addEventListener('tune:apply', () => {
     if (!gl) return;

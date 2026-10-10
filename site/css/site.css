@@ -53,7 +53,9 @@ html:has(body:not(.writeup)), body:not(.writeup) { height: 100%; overflow: hidde
 .txt .model + :is(p, ul, ol) { margin-top: 0.75em; }
 .txt { position: relative; }
 .model { position: absolute; right: 22px; bottom: 2px; width: 300px; height: 160px; pointer-events: none; }
-@media (max-width: 640px) { .model { position: static; margin: 0.5em auto 0; } }
+@media (max-width: 640px) { .model { position: relative; margin: 0.5em auto 0; } }
+/* the baked loop's video only feeds the renderer; it stays laid out (but unseen) so phones keep playing it */
+.model video { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
 .win a { color: inherit; }
 .win img { display: block; max-width: 100%; }
 .icon { display: inline-block; width: 1em; height: 1em; margin-right: 0.35em; vertical-align: -0.15em; fill: currentColor; }
@@ -71,6 +73,8 @@ html:has(body:not(.writeup)), body:not(.writeup) { height: 100%; overflow: hidde
   cursor: pointer;
 }
 .back[hidden] { display: none; }
+/* bigger invisible hit areas for fingers; the icons stay the same size */
+.back::after { content: ""; position: absolute; inset: -12px; }
 .back svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .back:focus-visible { outline: 1px solid var(--map-ink); }
 
@@ -117,6 +121,7 @@ html:has(body:not(.writeup)), body:not(.writeup) { height: 100%; overflow: hidde
 .message-box .trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .message-box button { position: absolute; right: 9px; bottom: 9px; width: 13px; height: 13px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
 .message-box button svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.message-box button::after { content: ""; position: absolute; inset: -14px -9px -9px -8px; }
 .message-box button:disabled { cursor: default; }
 .message-box button:focus-visible { outline: 1px solid var(--map-ink); outline-offset: 2px; }
 .message-status { margin-top: 0.5em; font-size: 13px; }

@@ -8,12 +8,19 @@
     "preview": "node dev/preview.js",
     "deploy": "node dev/build.js && node dev/deploy.js",
     "messages": "node dev/messages.js",
-    "vendor": "node dev/vendor.js"
+    "vendor": "node dev/vendor.js",
+    "model": "node dev/model.js",
+    "bake": "node dev/bake-model.js"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "esbuild": "^0.28.2",
     "marked": "^18.1.0",
     "marked-footnote": "^1.4.0",
+    "meshoptimizer": "^1.3.0",
+    "playwright": "^1.64.0",
     "three": "^0.186.1"
   }
 }

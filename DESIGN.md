@@ -71,14 +71,26 @@ other things you can write:
 - copy links: `[rukoaraba](copy:rukoaraba)` copies the text when clicked.
 - links to other sites open in a new tab.
 - 3d model: `{model:erinsona}` shows `site/media/erinsona.glb` (exported from the `SitIdle` action in
-  erinsona_base_v1.blend). three.js (`site/js/vendor/three.js`, rebuilt with `npm run vendor`)
+  erinsona_base_v1.blend). after exporting, run `npm run model -- path/to/erinsona.glb`: it drops data
+  the model doesn't use (texture coordinates, a second color set), quantizes it and compresses it with
+  meshopt, which took it from 2.5 MB to 595 KB. three.js (`site/js/vendor/three.js`, rebuilt with `npm run vendor`)
   renders her off screen and the main renderer draws her through the gradient map, inside
   her window. her body is turned 3/4, her head faces forward and turns a little toward the
   cursor, and her eyes follow it. the model section of the panel sets her levels and light.
   she casts a hard shadow toward the inside of the window, in the darkest color of the
   gradient map (measured along the whole map, so it works when the map starts light).
   her upper body sways a little in the loop, and at random moments she blinks (the Blink
-  shape key, sometimes twice) and flicks an ear or both.
+  shape key, sometimes twice) and flicks an ear or both. her scene lives in
+  `site/js/model-scene.js`, shared by the live model and the baked loop below.
+- phones (anything without hover) don't run three.js. there's no cursor for her to follow, so
+  they play a loop baked from the same scene: `npm run bake` (needs ffmpeg and
+  `npx playwright install chromium`) renders 12 seconds of her (three sways, with blinks and ear
+  flicks at fixed times) into `site/media/erinsona-loop-<light>-<fill>.mp4`, one per model
+  light/fill used by `settings.json` or a preset. each frame stacks what the renderer reads from
+  the live model: her gray, her alpha and her shadow's alpha, so levels and the gradient map still
+  apply on the phone. the video plays invisibly in her box and the renderer draws each new frame.
+  run it again after changing the model or a preset's model light or fill; until then, phones
+  showing that preset get the live model. `?tune` always gets the live model.
 - message box: `{message-box}` is a text box with a send arrow. enter sends. the intro's
   "you can tell me something" opens `content/windows/tell.md`, a popup with just this box.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last
@@ -100,6 +112,9 @@ in a 256-color ramp made from the palette.
   stays on the page, invisible, so selecting text, links and screen readers still work.
 - where windows overlap, their halos add up, so stacks get brighter.
 - text is drawn once more on top, sharp, so it stays readable through the fade.
+- everything that changes the picture asks for a frame, and the page is drawn at most once per
+  display frame. a new frame of her redraws only her box (she can't change pixels outside it),
+  which is why the canvas keeps its drawing between frames.
 - clicking drops a ripple that spreads across the page. it is turned off for reduced
   motion.
 - without webgl or javascript, css draws plain windows in the palette's colors.
@@ -176,10 +191,12 @@ the site runs on momoka, a home server, behind its cloudflare tunnel. nothing is
 exposed directly and cloudflare handles https.
 
 - `deploy/nginx.conf` is the config for an `nginx:alpine` container called `errrin`.
-  it serves `~/errr.in/site`, shows `404.html` for missing pages, compresses text files,
-  and caches `/media/` for a week.
+  it serves `~/errr.in/site`, shows `404.html` for missing pages, compresses text files and
+  the 3d model (served as `model/gltf-binary`), and caches `/media/` for a week.
 - security headers: a content security policy that only allows the site's own scripts
-  (pages have no inline scripts; the preset data is inline but not runnable), no
+  (pages have no inline scripts; the preset data is inline but not runnable) plus
+  `'wasm-unsafe-eval'`, which lets the model's meshopt decoder compile its webassembly (it does
+  not allow `eval`). no
   framing by other sites, nosniff, and no server version. folders and hidden files
   answer 404.
 - `deploy/compose.yml` is that container's entry in `~/docker/docker-compose.yml`. it
@@ -210,3 +227,23 @@ measured on an iphone (ios 18.7) with windows moving constantly:
 | 1 | 22 fps | 60 fps |
 | 3 | 7 fps | 60 fps |
 | 6 | 3 fps | 60 fps |
+
+opening the about window on a phone (emulated iphone at 3x, slow 4g, 4x slower cpu), before and
+after compressing the model:
+
+| | before | after |
+|---|---|---|
+| downloaded to show her | 2,625 KB | 537 KB |
+| tap to first frame of her | 17 to 18 s | 6 to 8 s |
+
+and with her on screen, on the same emulated phone drawing with an apple m5 gpu (5 seconds of
+her animating; the original, then the live model with the per-frame and her-box-only drawing,
+then the baked loop phones get):
+
+| | original | live | loop |
+|---|---|---|---|
+| tap to first frame of her | 14.2 s | 3.4 s | 0.5 s |
+| page draws per second | 61 | 61 | 32 |
+| screens' worth of pixels shaded per second | 61 | 9 | 7 |
+| gpu process busy, ms per second | 24.5 | 25.6 | 13 |
+| page main thread busy, ms per second | 51 | about the same | 26 |

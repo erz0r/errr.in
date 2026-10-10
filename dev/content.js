@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { Marked } from 'marked';
@@ -61,10 +61,21 @@ const withMessageBox = (html) => html.replace(/<p>\{message-box\}<\/p>|\{message
 
 const fileVersion = (path) => createHash('sha256').update(readFileSync(join(SITE, path))).digest('hex').slice(0, 8);
 
+// baked loops are named <model>-loop-<light>-<fill>.mp4 (see dev/bake-model.js)
+function modelLoops(name) {
+  const loops = {};
+  for (const file of readdirSync(join(SITE, 'media'))) {
+    const m = file.match(new RegExp(`^${name}-loop-([\\d.]+)-([\\d.]+)\\.mp4$`));
+    if (m) loops[`${Number(m[1])},${Number(m[2])}`] = `/media/${file}?v=${fileVersion(`/media/${file}`)}`;
+  }
+  return loops;
+}
+
 function withModel(html) {
   return html.replace(/(?:<p>)?\{model:([\w-]+)\}(?:<\/p>)?/g, (_, name) => {
-    const model = `/media/${name}.glb`, engine = '/js/vendor/three.js';
-    return `<div class="model" data-src="${model}?v=${fileVersion(model)}" data-engine="${engine}?v=${fileVersion(engine)}" aria-hidden="true"></div>`;
+    const model = `/media/${name}.glb`, engine = '/js/vendor/three.js', scene = '/js/model-scene.js';
+    return `<div class="model" data-src="${model}?v=${fileVersion(model)}" data-engine="${engine}?v=${fileVersion(engine)}"`
+      + ` data-scene="${scene}?v=${fileVersion(scene)}" data-loops="${escape(JSON.stringify(modelLoops(name)))}" aria-hidden="true"></div>`;
   });
 }
 
