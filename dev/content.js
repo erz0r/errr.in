@@ -119,9 +119,9 @@ const BACK = '<button class="back" type="button" aria-label="Back" hidden><svg v
 function windowHtml({ name, settings, title, html, headings }) {
   html = html.replace(/(id="|href="#|aria-describedby=")footnote-/g, `$1footnote-${name}-`);
   const style = [
-    typeof settings.width === 'number' && `--w: ${settings.width}px`,
-    typeof settings['max-width'] === 'number' && `--max-w: ${settings['max-width']}px`,
-    typeof settings.height === 'number' && `--h: ${settings.height}px`,
+    typeof settings.width === 'number' && `--w: ${settings.width}`,
+    typeof settings['max-width'] === 'number' && `--max-w: ${settings['max-width']}`,
+    typeof settings.height === 'number' && `--h: calc(${settings.height} * var(--u))`,
   ].filter(Boolean).join('; ');
   return `<section class="win" data-window="${escape(name)}"`
     + (settings.place ? ` data-place="${escape(settings.place)}"` : '')

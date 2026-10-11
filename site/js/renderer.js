@@ -7,6 +7,7 @@
   stage.prepend(canvas);
   const scaleParam = Number(new URLSearchParams(location.search).get('scale')) || 0;
   const pixelScale = () => scaleParam || devicePixelRatio;
+  const unit = () => parseFloat(getComputedStyle(root).fontSize) / 14 || 1;
 
   const VERTEX = `
 attribute vec2 aPos;
@@ -87,7 +88,7 @@ precision highp float;
 #define MAX ${max}
 #define MODE ${mode}
 uniform vec2 uSize;
-uniform float uScale;
+uniform float uScale, uPixel;
 uniform vec4 uRect[MAX];
 uniform vec4 uArea[MAX];
 uniform float uAlpha[MAX];
@@ -259,7 +260,7 @@ float fadeAt(float a, vec2 p, vec4 rect, vec4 pattern) {
 void main() {
   // uLife: 0 plain, 1 the background's dither cells come from the game of life, 2 write which cells start alive.
   // when writing, each fragment is one dither cell, drawn at the cell's center.
-  float cellPx = max(uDitherScale, 1.0) * uScale;
+  float cellPx = max(uDitherScale, 1.0) * uPixel;
   vec2 fc = uLife > 1.5 ? (floor(gl_FragCoord.xy) + 0.5) * cellPx : gl_FragCoord.xy;
   vec2 p = vec2(fc.x, uSize.y * uScale - fc.y) / uScale;
   vec2 cell = floor(fc / cellPx);
@@ -444,7 +445,7 @@ void main() {
 #endif
 }`;
 
-  const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
+  const MAIN_UNIFORMS = ['uSize', 'uScale', 'uPixel', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
     'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uShadowStrength', 'uModelRect', 'uInset', 'uInsetWin', 'uInsetCount', 'uInsetBlur', 'uInsetMix', 'uInsetInkMix', 'uInsetTone', 'uInsetInkTone', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uImageLevels', 'uImageRange', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight', 'uLife', 'uLifeState', 'uLifeGrid', 'uLifeAlpha', 'uLifeFade', 'uCacheA', 'uCacheB', 'uCanvas'];
   const LOOP_GAP = 16;
@@ -694,8 +695,8 @@ void main() {
       t.fillStyle = g;
       t.fillRect(0, 0, c.width, c.height);
     };
-    fade(c.width, settings.imageFadeX, true);
-    fade(c.height, settings.imageFadeY, false);
+    fade(c.width, settings.imageFadeX * unit(), true);
+    fade(c.height, settings.imageFadeY * unit(), false);
     ctx.drawImage(c, r.left, r.top, r.width, r.height);
   }
 
@@ -993,7 +994,7 @@ void main() {
     const { cols, rows } = liquid;
     const drops = new Float32Array(16);
     splashes.splice(0, 4).forEach(([x, y], i) => {
-      drops.set([x / CELL, rows - y / CELL, (settings.splash * 1.5) / CELL, settings.click * 0.8], i * 4);
+      drops.set([x / CELL, rows - y / CELL, (settings.splash * 1.5 * unit()) / CELL, settings.click * 0.8], i * 4);
     });
     const [from, to] = [liquid.state[liquid.read], liquid.state[1 - liquid.read]];
     renderInto(to, cols, rows, stepProgram, (u) => {
@@ -1193,7 +1194,7 @@ void main() {
     for (const win of drawn) if (!rasters.has(win) && !isColumn(win)) rasterize(win);
     if (atlasDirty || atlas.blur !== settings.blur) buildAtlas();
 
-    const scale = pixelScale();
+    const scale = pixelScale(), U = unit();
     const [w, h] = [Math.round(box.width * scale), Math.round(box.height * scale)];
     if (canvas.width !== w || canvas.height !== h) [canvas.width, canvas.height] = [w, h];
     gl.viewport(0, 0, w, h);
@@ -1217,7 +1218,7 @@ void main() {
     drawn.forEach((win, i) => {
       const r = win.getBoundingClientRect();
       if (isColumn(win)) {
-        const grow = 2 * settings.feather;
+        const grow = 2 * settings.feather * U;
         rects.set([r.left - box.left - grow, -1e5, r.right - box.left + grow, 1e5], i * 4);
       } else {
         rects.set([r.left - box.left, r.top - box.top, r.right - box.left, r.bottom - box.top], i * 4);
@@ -1248,9 +1249,10 @@ void main() {
     const send = (prog) => {
       gl.useProgram(prog.program);
       const u = prog.uniform;
-      gl.uniform2f(u.uSize, box.width, box.height);
-      gl.uniform1f(u.uScale, scale);
-      gl.uniform4fv(u.uRect, rects);
+      gl.uniform2f(u.uSize, box.width / U, box.height / U);
+      gl.uniform1f(u.uScale, scale * U);
+      gl.uniform1f(u.uPixel, scale);
+      gl.uniform4fv(u.uRect, rects.map((v) => v / U));
       gl.uniform4fv(u.uArea, areas);
       gl.uniform1fv(u.uAlpha, alphas);
       gl.uniform4fv(u.uFade, patterns);
@@ -1258,7 +1260,7 @@ void main() {
       gl.uniform1f(u.uNoiseScale, settings.noiseScale);
       gl.uniform1f(u.uPortalReach, settings.portalReach);
       gl.uniform1f(u.uPortalBlur, settings.portalBlur);
-      gl.uniform4fv(u.uTail, tail);
+      gl.uniform4fv(u.uTail, tail.map((v) => v / U));
       gl.uniform1f(u.uDither, settings.dither);
       gl.uniform1f(u.uDitherLevels, settings.ditherLevels);
       gl.uniform1f(u.uDitherScale, settings.ditherScale);
@@ -1266,7 +1268,7 @@ void main() {
       gl.uniform1f(u.uDitherPattern, settings.ditherPattern);
       const modelWin = model.tex && model.spot ? drawn.indexOf(model.spot.closest('.win')) : -1;
       const mr = model.spot?.getBoundingClientRect();
-      gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top, mr.right - box.left, mr.bottom - box.top] : [0, 0, 0, 0]));
+      gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top, mr.right - box.left, mr.bottom - box.top].map((v) => v / U) : [0, 0, 0, 0]));
       gl.uniform1f(u.uModelWin, modelWin);
       gl.uniform1f(u.uModelPacked, model.panel ? 1 : 0);
       gl.uniform3f(u.uModelPanel, ...(model.panel ?? [1, 0, 0]));
@@ -1281,7 +1283,7 @@ void main() {
           insetWins[insetCount++] = i;
         }
       });
-      gl.uniform4fv(u.uInset, insets);
+      gl.uniform4fv(u.uInset, insets.map((v) => v / U));
       gl.uniform1fv(u.uInsetWin, insetWins);
       gl.uniform1i(u.uInsetCount, insetCount);
       gl.uniform1f(u.uInsetBlur, settings.insetBlur);
@@ -1306,7 +1308,7 @@ void main() {
       gl.uniform3f(u.uInkColor, ...(settings.inkColor.length === 3 ? settings.inkColor : [1, 1, 1]));
       gl.uniform1f(u.uInkOverride, settings.inkOverride);
       gl.uniform1f(u.uMapOn, stage.dataset.map === 'off' ? 0 : 1);
-      gl.uniform2f(u.uLiquidSize, liquid ? liquid.cols * CELL : 1, liquid ? liquid.rows * CELL : 1);
+      gl.uniform2f(u.uLiquidSize, liquid ? liquid.cols * CELL / U : 1, liquid ? liquid.rows * CELL / U : 1);
       gl.uniform1f(u.uRefract, settings.refract);
       gl.uniform1f(u.uLight, settings.light);
       gl.uniform1f(u.uLife, seed ? 2 : life ? 1 : 0);

@@ -6,6 +6,13 @@ whole page is recolored through a gradient map.
 the font is fraunces (sil open font license, `site/media/fonts/`), with its soft axis turned
 all the way up.
 
+everything grows with the screen. the root font size is 16px up to about a 1366px wide
+window, about 18px at 1080p and at most 24px (150%), and it follows the browser's own text
+size setting. sizes in the windows are multiples of `--u` (1/14 of the root size), and the
+renderer works in the same units, so glows, edges, popups and boxes scale with the text.
+dither dots stay tied to real screen pixels so they stay sharp. text lines stay between
+about 55 and 75 characters.
+
 ## running it
 
 ```

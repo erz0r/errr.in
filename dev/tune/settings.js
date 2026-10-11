@@ -103,8 +103,8 @@ export function cssVars(s) {
   --model-gamma: ${s.modelGamma};
   --model-light: ${s.modelLight};
   --model-fill: ${s.modelFill};
-  --model-x: ${s.modelX}px;
-  --model-y: ${s.modelY}px;
+  --model-x: ${s.modelX};
+  --model-y: ${s.modelY};
   --model-size: ${s.modelSize};
   --model-turn: ${s.modelTurn};
   --image-black: ${s.imageBlack};
@@ -122,10 +122,10 @@ export function cssVars(s) {
   --inset-mix: ${s.insetMix};
   --inset-ink-tone: ${s.insetInkTone};
   --inset-ink-mix: ${s.insetInkMix};
-  --sect-pad-x: ${s.sectPadX}px;
-  --sect-pad-y: ${s.sectPadY}px;
+  --sect-pad-x: ${s.sectPadX};
+  --sect-pad-y: ${s.sectPadY};
   --cols-split: ${s.colsSplit};
-  --cols-gap: ${s.colsGap}px;
+  --cols-gap: ${s.colsGap};
   --window-layout: ${s.windowLayout};
   --bg-gray: ${+bg.toFixed(4)};
 ${palette}

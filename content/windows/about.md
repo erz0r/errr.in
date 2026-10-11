@@ -1,7 +1,7 @@
 ---
 title: about
 flat: true
-width: 760
+width: 620
 ---
 # about
 

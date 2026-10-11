@@ -360,8 +360,9 @@ function fileControls() {
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'grabbing';
     }
-    current.modelX = clamp(Math.round(grab.modelX + dx), -900, 900);
-    current.modelY = clamp(Math.round(grab.modelY + dy), -900, 900);
+    const k = parseFloat(getComputedStyle(document.documentElement).fontSize) / 14 || 1;
+    current.modelX = clamp(Math.round(grab.modelX + dx / k), -900, 900);
+    current.modelY = clamp(Math.round(grab.modelY + dy / k), -900, 900);
     changed();
   }, true);
   const drop = (e) => {

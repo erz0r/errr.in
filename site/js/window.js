@@ -18,6 +18,7 @@
   const fadeMs = () => cssNumber('--fade-ms');
   const settling = () => layout() === 'pack' && cssNumber('--window-push') > 0;
   const stageBox = () => stage.getBoundingClientRect();
+  const unit = () => parseFloat(getComputedStyle(document.documentElement).fontSize) / 14 || 1;
 
   function rectOf(win) {
     const box = stageBox(), r = win.getBoundingClientRect();
@@ -97,12 +98,12 @@
     const box = stageBox(), line = anchor.getClientRects()[0], w = win.offsetWidth, h = win.offsetHeight;
     const content = win.querySelector('.txt')?.firstElementChild;
     const inset = content ? content.getBoundingClientRect().left - win.getBoundingClientRect().left : 0;
-    const tail = 38, tip = line.top - box.top + 16;
+    const k = unit(), tail = 38 * k, tip = line.top - box.top + 16 * k;
     const x = Math.max(MARGIN, Math.min(line.left - box.left - inset, box.width - w - MARGIN));
     const y = Math.max(MARGIN, Math.min(tip - tail - h, box.height - h - MARGIN));
     moveTo(win, x, y);
-    const tipX = line.left - box.left + 4 - x;
-    win.dataset.tail = [tipX, tip - y, tipX + 3, tipX + 25].map((v) => v.toFixed(1)).join(',');
+    const tipX = line.left - box.left + 4 * k - x;
+    win.dataset.tail = [tipX, tip - y, tipX + 3 * k, tipX + 25 * k].map((v) => v.toFixed(1)).join(',');
   }
 
   addEventListener('tune:apply', () => visibleWindows().filter((w) => w.hasAttribute('data-popup')).forEach(placePopup));
@@ -150,7 +151,7 @@
     let x = (box.width - w) / 2, y = (box.height - h) / 2;
     if (opener && opener !== win) {
       const r = rectOf(opener);
-      [x, y] = [r.x + OFFSET, r.y + OFFSET];
+      [x, y] = [r.x + OFFSET * unit(), r.y + OFFSET * unit()];
     }
     const clamp = (v, room) => Math.max(MARGIN, Math.min(v, room - MARGIN));
     moveTo(win, clamp(x, box.width - w), clamp(y, box.height - h));
@@ -247,7 +248,7 @@
   let anchor = null;
   let running = false, lastTime = 0, calmFrames = 0;
 
-  const clearance = () => 2.6 * cssNumber('--halo-size') * cssNumber('--window-push');
+  const clearance = () => 2.6 * cssNumber('--halo-size') * unit() * cssNumber('--window-push');
 
   const onPage = (v, size, room) => Math.max(MARGIN, Math.min(v, room - size - MARGIN));
   const overlapArea = (a, b, pad) =>
