@@ -103,6 +103,29 @@ export function cssVars(s) {
   --model-gamma: ${s.modelGamma};
   --model-light: ${s.modelLight};
   --model-fill: ${s.modelFill};
+  --model-x: ${s.modelX}px;
+  --model-y: ${s.modelY}px;
+  --model-size: ${s.modelSize};
+  --model-turn: ${s.modelTurn};
+  --image-black: ${s.imageBlack};
+  --image-white: ${s.imageWhite};
+  --image-gamma: ${s.imageGamma};
+  --image-from: ${s.imageFrom};
+  --image-to: ${s.imageTo};
+  --image-fade-x: ${s.imageFadeX};
+  --image-fade-y: ${s.imageFadeY};
+  --shadow-angle: ${s.shadowAngle};
+  --shadow-height: ${s.shadowHeight};
+  --shadow-strength: ${s.shadowStrength};
+  --inset-blur: ${s.insetBlur}px;
+  --inset-tone: ${s.insetTone};
+  --inset-mix: ${s.insetMix};
+  --inset-ink-tone: ${s.insetInkTone};
+  --inset-ink-mix: ${s.insetInkMix};
+  --sect-pad-x: ${s.sectPadX}px;
+  --sect-pad-y: ${s.sectPadY}px;
+  --cols-split: ${s.colsSplit};
+  --cols-gap: ${s.colsGap}px;
   --window-layout: ${s.windowLayout};
   --bg-gray: ${+bg.toFixed(4)};
 ${palette}
@@ -135,6 +158,29 @@ const RANGES = {
   modelGamma: [0.2, 3, 1],
   modelLight: [0, 6, 1.3],
   modelFill: [0, 4, 0.5],
+  modelX: [-900, 900, 0],
+  modelY: [-900, 900, 0],
+  modelSize: [0.3, 2.5, 1],
+  modelTurn: [-180, 180, -34],
+  imageBlack: [0, 1, 0],
+  imageWhite: [0, 1, 1],
+  imageGamma: [0.2, 3, 1],
+  imageFrom: [0, 1, 0],
+  imageTo: [0, 1, 1],
+  imageFadeX: [0, 200, 28],
+  imageFadeY: [0, 200, 12],
+  shadowAngle: [-180, 180, 51],
+  shadowHeight: [5, 85, 39],
+  shadowStrength: [0, 1, 1],
+  insetBlur: [0, 40, 10],
+  insetTone: [0, 1, 0.3],
+  insetMix: [0, 1, 1],
+  insetInkTone: [0, 1, 1],
+  insetInkMix: [0, 1, 0],
+  sectPadX: [0, 80, 18],
+  sectPadY: [0, 80, 14],
+  colsSplit: [0.15, 0.85, 0.33],
+  colsGap: [0, 120, 24],
   minContrast: [1, 12, 4.5],
   windowPush: [0, 2, 1],
 };

@@ -22,12 +22,17 @@
 .tune-win .hdr:hover { background: rgb(66 150 250 / 0.8); }
 .tune-win .section { display: grid; gap: 4px; }
 .tune-win .row { display: flex; align-items: center; gap: 6px; }
-.tune-win .lbl { flex: 1; white-space: nowrap; }
+.tune-win .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tune-win .item { display: grid; gap: 1px; }
+.tune-win .desc { display: none; padding: 0 0 3px 2px; color: #8c8c8c; font-size: 11px; white-space: normal; }
+.tune-win.explain .desc { display: block; }
+.tune-win .sub { margin-top: 4px; padding-bottom: 1px; border-bottom: 1px solid rgb(110 110 128 / 0.4); color: #9fb4d0; }
+.tune-win .choices { flex-wrap: wrap; }
 .tune-win .hint { color: #808080; }
 .tune-win .warn { color: #ff6b6b; }
 .tune-win .dirty { color: #f2c94c; }
 
-.tune-win .slider { position: relative; flex: 0 0 180px; height: 18px; background: rgb(41 74 122 / 0.54); cursor: ew-resize; }
+.tune-win .slider { position: relative; flex: 0 0 160px; height: 18px; background: rgb(41 74 122 / 0.54); cursor: ew-resize; }
 .tune-win .slider:hover { background: rgb(66 150 250 / 0.4); }
 .tune-win .slider:focus-visible, .tune-win .mark:focus-visible { outline: 1px solid #4296fa; }
 .tune-win .fill { position: absolute; inset: 0 auto 0 0; background: rgb(66 150 250 / 0.55); }

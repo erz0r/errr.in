@@ -45,15 +45,141 @@ function draggable(handle, onMove) {
   });
 }
 
+const HELP = {
+  feather: 'how far a window\'s edge fades into the page',
+  edgeBlur: 'softens the window\'s outline under the fade',
+  haloSize: 'how far the glow around each window reaches',
+  haloGlow: 'how bright that glow is',
+  stackGlow: 'how much a window\'s glow shows over the windows under it',
+  textOverlay: 'draws the text again on top, so glows and her never cover it',
+  minContrast: 'text is pushed lighter or darker until it reaches this contrast with its window',
+  windowBg: 'its brightness picks the window\'s spot on the gradient map',
+  windowInk: 'its brightness picks the text\'s spot on the gradient map',
+  ditherAmount: '0 is smooth, 1 is fully dithered',
+  ditherLevels: 'how many colors of the gradient map are left after dithering',
+  ditherScale: 'the size of one dither dot',
+  ditherSpread: 'at 0 the colors meet in hard bands, at 1 they blend through the pattern',
+  ditherPattern: 'the shape the dots make',
+  windowLayout: 'swap shows one window at a time, pack arranges them around the open one, stack offsets them',
+  windowPush: 'room between windows in pack, where 1 means their glows just touch',
+  fadeMs: 'how long a window takes to appear or vanish',
+  fadeSpread: 'how patchy the fade is, where 0 fades evenly',
+  fadeScale: 'how big the patches are',
+  portalReach: 'how far the popup clears the page around itself',
+  portalBlur: 'how soft that cleared edge is',
+  insetTone: 'the box color, picked from the gradient map',
+  insetMix: 'how much of that color shows. lower dithers it toward the window',
+  insetInkTone: 'the text color inside boxes, picked from the gradient map',
+  insetInkMix: 'how much of that text color shows',
+  insetBlur: 'how soft the box edges are',
+  sectPadX: 'room between a box\'s sides and its text',
+  sectPadY: 'room above and below the text in a box',
+  colsSplit: 'how much of the width the left box gets',
+  colsGap: 'space between the two lower boxes',
+  modelX: 'move her left or right',
+  modelY: 'move her up or down',
+  modelSize: 'how big she is',
+  modelTurn: 'which way she faces',
+  imageBlack: 'grays in a picture below this all become the "from" color',
+  imageWhite: 'grays in a picture above this all become the "to" color',
+  imageGamma: 'brightens or darkens a picture\'s middle tones',
+  imageFrom: 'the color a picture\'s darkest parts become, picked from the gradient map',
+  imageFadeX: 'how far the left and right sides of pictures in the log fade into the box',
+  imageFadeY: 'how far their top and bottom fade',
+  imageTo: 'the color a picture\'s lightest parts become. put it left of "from" to flip the picture',
+  modelLight: 'the main light on her',
+  modelFill: 'the soft light that fills in her shadows',
+  modelBlack: 'grays below this turn into the start of the gradient map',
+  modelWhite: 'grays above this turn into the end of the gradient map',
+  modelGamma: 'brightens or darkens her middle tones',
+  shadowAngle: 'which side the sun shines from',
+  shadowHeight: 'how high the sun is. lower makes a longer shadow',
+  shadowStrength: 'how dark her shadow is',
+  liquidRefract: 'how much ripples bend the page',
+  liquidLight: 'how much ripples catch the light',
+  liquidDamping: 'how long ripples keep going',
+  liquidClick: 'how big a splash a click makes',
+  liquidSize: 'how wide one splash is',
+};
+
+const store = {
+  get: (k) => { try { return localStorage.getItem(`tune:${k}`); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(`tune:${k}`, v); } catch {} },
+};
+
+function item(row, label, help = '') {
+  const wrap = el('div', 'item');
+  wrap.dataset.search = `${label} ${help}`.toLowerCase();
+  if (help) row.title = help;
+  wrap.append(row);
+  if (help) wrap.append(el('div', 'desc', help));
+  return wrap;
+}
+
+const sub = (text) => el('div', 'sub', text);
+
+const OPEN = ['presets', 'colors'];
 function section(title, ...children) {
   const body = el('div', 'section');
   body.append(...children);
-  const hdr = el('div', 'hdr', `▾ ${title}`);
-  hdr.onclick = () => {
-    body.hidden = !body.hidden;
-    hdr.textContent = `${body.hidden ? '▸' : '▾'} ${title}`;
+  const hdr = el('div', 'hdr');
+  const show = (open) => {
+    body.hidden = !open;
+    hdr.textContent = `${open ? '▾' : '▸'} ${title}`;
   };
+  const saved = store.get(`open:${title}`);
+  show(saved === null ? OPEN.includes(title) : saved === '1');
+  hdr.onclick = () => {
+    show(body.hidden);
+    if (!document.querySelector('#tune input[type="text"]')?.value.trim()) store.set(`open:${title}`, body.hidden ? '0' : '1');
+  };
+  hdr.dataset.title = title;
   return [hdr, body];
+}
+
+function toolbar() {
+  const search = el('input');
+  search.type = 'text';
+  search.placeholder = 'find a setting';
+  const explain = el('input');
+  explain.type = 'checkbox';
+  const explainRow = el('label', 'row');
+  explainRow.append(explain, el('span', 'lbl', 'explain each setting'));
+  const setExplain = (on) => {
+    explain.checked = on;
+    document.getElementById('tune')?.classList.toggle('explain', on);
+    store.set('explain', on ? '1' : '0');
+  };
+  explain.onchange = () => setExplain(explain.checked);
+  requestAnimationFrame(() => setExplain(store.get('explain') !== '0'));
+  search.oninput = () => {
+    const q = search.value.trim().toLowerCase();
+    const panel = document.getElementById('tune');
+    for (const hdr of panel.querySelectorAll('.hdr')) {
+      const body = hdr.nextElementSibling;
+      if (!q) {
+        hdr.hidden = false;
+        body.hidden = store.get(`open:${hdr.dataset.title}`) === null ? !OPEN.includes(hdr.dataset.title) : store.get(`open:${hdr.dataset.title}`) !== '1';
+        hdr.textContent = `${body.hidden ? '▸' : '▾'} ${hdr.dataset.title}`;
+        for (const child of body.children) child.style.display = '';
+        continue;
+      }
+      let hits = 0, group = '';
+      const whole = hdr.dataset.title.includes(q);
+      for (const child of body.children) {
+        if (child.classList.contains('sub')) group = child.textContent.toLowerCase();
+        const hit = whole || (child.classList.contains('item') && (group.includes(q) || child.dataset.search.includes(q)));
+        child.style.display = hit ? '' : 'none';
+        hits += hit;
+      }
+      hdr.hidden = !hits;
+      body.hidden = !hits;
+      hdr.textContent = `${hits ? '▾' : '▸'} ${hdr.dataset.title}`;
+    }
+  };
+  const row = el('div', 'row');
+  row.append(search);
+  return [row, explainRow];
 }
 
 const snap = (v, min, max, step) => +clamp(Math.round(v / step) * step, min, max).toFixed(4);
@@ -76,7 +202,7 @@ function slider(label, obj, key, min, max, step, unit = '', onSet = () => {}) {
   });
   const row = el('div', 'row');
   row.append(box, el('span', 'lbl', label));
-  return row;
+  return item(row, label, HELP[key]);
 }
 
 const effectSliders = [];
@@ -85,14 +211,26 @@ function effectSlider(label, key, min, max, step, unit) {
   return slider(label, () => current, key, min, max, step, unit);
 }
 
-function colorField(label, get, set) {
+function toneSlider(label, key) {
+  const row = slider(label, () => current, key, 0, 1, 0.005);
+  const box = row.querySelector('.slider'), fill = row.querySelector('.fill');
+  row.querySelector('.val').style.textShadow = '0 0 2px #000, 0 0 3px #000, 0 0 4px #000';
+  Object.assign(fill.style, { background: 'transparent', borderRight: '2px solid #fff', boxShadow: '1px 0 0 #000' });
+  refreshers.push(() => {
+    const stops = sortedStops(current.palette).map((s) => `${s.color} ${(s.pos * 100).toFixed(1)}%`).join(', ');
+    box.style.background = `linear-gradient(90deg, ${stops})`;
+  });
+  return row;
+}
+
+function colorField(label, get, set, help) {
   const input = el('input');
   input.type = 'color';
   input.oninput = () => { set(input.value); changed(); };
   refreshers.push(() => { input.value = get(); });
   const row = el('div', 'row');
   row.append(input, el('span', 'lbl', label));
-  return row;
+  return item(row, label, help);
 }
 
 function paletteEditor() {
@@ -200,7 +338,59 @@ function fileControls() {
     status.textContent = dirty ? 'unsaved changes' : 'saved';
     status.className = dirty ? 'lbl dirty' : 'lbl';
   });
-  addEventListener('keydown', (e) => {
+  function dragModel() {
+  let grab = null;
+  const overHer = (spot, e) => {
+    const r = spot.getBoundingClientRect(), room = r.height * 0.3;
+    return e.clientX > r.left + room && e.clientX < r.right - room && e.clientY > r.top + room && e.clientY < r.bottom - room;
+  };
+  addEventListener('pointerdown', (e) => {
+    const spot = document.querySelector('.model');
+    if (!spot || e.button !== 0 || e.target.closest('.tune-win')) return;
+    if (!overHer(spot, e)) return;
+    grab = { x: e.clientX, y: e.clientY, modelX: current.modelX, modelY: current.modelY, moving: false };
+  }, true);
+  addEventListener('pointermove', (e) => {
+    if (!grab) return;
+    const [dx, dy] = [e.clientX - grab.x, e.clientY - grab.y];
+    if (!grab.moving && Math.hypot(dx, dy) < 4) return;
+    if (!grab.moving) {
+      grab.moving = true;
+      getSelection().removeAllRanges();
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'grabbing';
+    }
+    current.modelX = clamp(Math.round(grab.modelX + dx), -900, 900);
+    current.modelY = clamp(Math.round(grab.modelY + dy), -900, 900);
+    changed();
+  }, true);
+  const drop = (e) => {
+    if (grab?.moving) {
+      e.preventDefault();
+      const eat = (c) => { c.preventDefault(); c.stopPropagation(); };
+      addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => removeEventListener('click', eat, true));
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    }
+    grab = null;
+  };
+  addEventListener('pointerup', drop, true);
+  addEventListener('pointercancel', drop, true);
+  addEventListener('wheel', (e) => {
+    const spot = document.querySelector('.model');
+    if (!spot || e.target.closest('.tune-win')) return;
+    if (!overHer(spot, e)) return;
+    e.preventDefault();
+    const delta = (e.deltaY || e.deltaX) * (e.deltaMode === 1 ? 33 : 1);
+    if (e.shiftKey) current.modelTurn = Math.round((((current.modelTurn - delta * 0.05 + 540) % 360) + 360) % 360 - 180);
+    else current.modelSize = +clamp(current.modelSize * Math.exp(-delta * 0.001), 0.3, 2.5).toFixed(3);
+    changed();
+  }, { capture: true, passive: false });
+}
+dragModel();
+
+addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save.click(); }
   });
 
@@ -226,8 +416,8 @@ function mapToggle() {
   box.checked = true;
   box.onchange = () => { stage.dataset.map = box.checked ? 'on' : 'off'; };
   const row = el('label', 'row');
-  row.append(box, el('span', 'lbl', 'gradient map (not saved)'));
-  return row;
+  row.append(box, el('span', 'lbl', 'gradient map on'));
+  return item(row, 'gradient map', 'turn it off to see the gray image underneath. not saved');
 }
 
 function floatingWindow(id, titleText, children) {
@@ -335,27 +525,18 @@ function perfControls() {
   return [row, out];
 }
 
-function choiceRow(key, options) {
-  const row = el('div', 'row');
+function choiceRow(key, options, label) {
+  const row = el('div', 'row choices');
   for (const option of options) {
     const button = el('button', '', option);
     button.onclick = () => { current[key] = option; changed(); };
     refreshers.push(() => button.classList.toggle('on', current[key] === option));
     row.append(button);
   }
-  return row;
+  return item(row, `${label} ${options.join(' ')}`, HELP[key]);
 }
 
-function layoutPicker() {
-  const row = el('div', 'row');
-  for (const layout of ['swap', 'pack', 'stack']) {
-    const button = el('button', '', layout);
-    button.onclick = () => { current.windowLayout = layout; changed(); };
-    refreshers.push(() => button.classList.toggle('on', current.windowLayout === layout));
-    row.append(button);
-  }
-  return row;
-}
+const layoutPicker = () => choiceRow('windowLayout', ['swap', 'pack', 'stack'], 'layout');
 
 function presetControls() {
   const cleanName = (n) => n.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
@@ -450,60 +631,95 @@ function generatorToggle(win) {
 
 const genWin = generatorWindow();
 floatingWindow('tune', 'tune   ` to hide', [
+  ...toolbar(),
   ...section('presets', ...presetControls()),
-  ...section('effect',
-    effectSlider('feather', 'feather', 0, 120, 1, 'px'),
-    effectSlider('edge blur', 'edgeBlur', 0, 40, 0.5, 'px'),
-    effectSlider('halo size', 'haloSize', 0, 160, 1, 'px'),
-    effectSlider('halo glow', 'haloGlow', 0, 1, 0.01),
-    effectSlider('stack glow', 'stackGlow', 0, 1, 0.01),
-    randomizeButton(),
+  ...section('save', ...fileControls()),
+  ...section('colors',
+    ...paletteEditor(), generatorToggle(genWin),
+    sub('window'),
+    colorField('window', () => current.window.bg, (v) => { current.window.bg = v; }, HELP.windowBg),
+    colorField('text', () => current.window.ink, (v) => { current.window.ink = v; }, HELP.windowInk),
+    slider('min contrast', () => current, 'minContrast', 1, 12, 0.1, ':1'),
+    contrastReadout(),
     mapToggle(),
   ),
-  ...section('palette', ...paletteEditor(), generatorToggle(genWin), contrastReadout()),
-  ...section('window',
-    slider('text overlay', () => current, 'textOverlay', 0, 1, 0.01),
-    slider('min text contrast', () => current, 'minContrast', 1, 12, 0.1, ':1'),
-    colorField('background', () => current.window.bg, (v) => { current.window.bg = v; }),
-    colorField('text', () => current.window.ink, (v) => { current.window.ink = v; }),
+  ...section('glow & edges',
+    effectSlider('feather', 'feather', 0, 200, 1, 'px'),
+    effectSlider('edge blur', 'edgeBlur', 0, 100, 0.5, 'px'),
+    effectSlider('glow size', 'haloSize', 0, 300, 1, 'px'),
+    effectSlider('glow strength', 'haloGlow', 0, 1, 0.01),
+    effectSlider('glow over windows', 'stackGlow', 0, 1, 0.01),
+    slider('text on top', () => current, 'textOverlay', 0, 1, 0.01),
+    randomizeButton(),
   ),
-  ...section('liquid',
-    slider('refraction', () => current, 'liquidRefract', 0, 60, 1, 'px'),
-    slider('light', () => current, 'liquidLight', 0, 1, 0.01),
-    slider('damping', () => current, 'liquidDamping', 0.9, 0.999, 0.001),
-    slider('click splash', () => current, 'liquidClick', 0, 2, 0.01),
-    slider('size', () => current, 'liquidSize', 2, 80, 1, 'px'),
-    el('div', 'hint', 'off when the device asks for reduced motion'),
+  ...section('dither',
+    slider('amount', () => current, 'ditherAmount', 0, 1, 0.01),
+    slider('steps', () => current, 'ditherLevels', 2, 32, 1),
+    slider('dot size', () => current, 'ditherScale', 1, 8, 0.5, 'px'),
+    slider('blend', () => current, 'ditherSpread', 0, 1, 0.01),
+    choiceRow('ditherPattern', ['bayer2', 'bayer4', 'bayer8', 'noise', 'lines', 'diagonal'], 'pattern'),
   ),
   ...section('windows',
     layoutPicker(),
-    slider('fade time', () => current, 'fadeMs', 0, 2000, 10, 'ms'),
-    slider('fade spread', () => current, 'fadeSpread', 0, 0.95, 0.01),
-    slider('fade scale', () => current, 'fadeScale', 40, 1000, 10, 'px'),
-    slider('popup fade reach', () => current, 'portalReach', 0, 120, 1, 'px'),
-    slider('popup fade blur', () => current, 'portalBlur', 0, 40, 0.5, 'px'),
     slider('spacing', () => current, 'windowPush', 0, 2, 0.05),
-    el('div', 'hint', 'swap: one window at a time · pack: around the focused one (spacing 1 = glows just clear) · stack: offset'),
+    sub('fade in and out'),
+    slider('time', () => current, 'fadeMs', 0, 2000, 10, 'ms'),
+    slider('patchiness', () => current, 'fadeSpread', 0, 0.95, 0.01),
+    slider('patch size', () => current, 'fadeScale', 40, 1000, 10, 'px'),
+    sub('message popup'),
+    slider('clearing', () => current, 'portalReach', 0, 120, 1, 'px'),
+    slider('clearing blur', () => current, 'portalBlur', 0, 40, 0.5, 'px'),
   ),
-  ...section('dither (experiment)',
-    slider('amount', () => current, 'ditherAmount', 0, 1, 0.01),
-    slider('levels', () => current, 'ditherLevels', 2, 32, 1),
-    slider('pixel size', () => current, 'ditherScale', 1, 8, 0.5, 'px'),
-    slider('spread', () => current, 'ditherSpread', 0, 1, 0.01),
-    choiceRow('ditherPattern', ['bayer2', 'bayer4', 'bayer8', 'noise', 'lines', 'diagonal']),
-    el('div', 'hint', 'amount 0 is off. dithers the gray image under the gradient map, so only palette colors show'),
+  ...section('about page boxes',
+    sub('color'),
+    toneSlider('box', 'insetTone'),
+    slider('box amount', () => current, 'insetMix', 0, 1, 0.01),
+    toneSlider('text', 'insetInkTone'),
+    slider('text amount', () => current, 'insetInkMix', 0, 1, 0.01),
+    slider('edge blur', () => current, 'insetBlur', 0, 40, 0.5, 'px'),
+    sub('size'),
+    slider('padding sides', () => current, 'sectPadX', 0, 80, 1, 'px'),
+    slider('padding top', () => current, 'sectPadY', 0, 80, 1, 'px'),
+    slider('left box width', () => current, 'colsSplit', 0.15, 0.85, 0.01),
+    slider('gap', () => current, 'colsGap', 0, 120, 1, 'px'),
   ),
-  ...section('model',
+  ...section('images',
+    toneSlider('from', 'imageFrom'),
+    toneSlider('to', 'imageTo'),
+    slider('black point', () => current, 'imageBlack', 0, 1, 0.01),
+    slider('white point', () => current, 'imageWhite', 0, 1, 0.01),
+    slider('gamma', () => current, 'imageGamma', 0.2, 3, 0.01),
+    slider('side fade', () => current, 'imageFadeX', 0, 200, 1, 'px'),
+    slider('top/bottom fade', () => current, 'imageFadeY', 0, 200, 1, 'px'),
+    el('div', 'hint', 'for pictures in the log and in windows'),
+  ),
+  ...section('erinsona',
+    el('div', 'hint', 'on the page: drag her to move, scroll over her to resize, shift+scroll to turn'),
+    sub('place'),
+    slider('x', () => current, 'modelX', -900, 900, 1, 'px'),
+    slider('y', () => current, 'modelY', -900, 900, 1, 'px'),
+    slider('size', () => current, 'modelSize', 0.3, 2.5, 0.01),
+    slider('turn', () => current, 'modelTurn', -180, 180, 1, '°'),
+    sub('light'),
+    slider('key light', () => current, 'modelLight', 0, 6, 0.05),
+    slider('fill light', () => current, 'modelFill', 0, 4, 0.05),
     slider('black point', () => current, 'modelBlack', 0, 1, 0.01),
     slider('white point', () => current, 'modelWhite', 0, 1, 0.01),
     slider('gamma', () => current, 'modelGamma', 0.2, 3, 0.01),
-    slider('light', () => current, 'modelLight', 0, 6, 0.05),
-    slider('fill', () => current, 'modelFill', 0, 4, 0.05),
-    el('div', 'hint', 'levels for the 3d model before the gradient map, like photoshop levels'),
+    sub('shadow'),
+    slider('sun direction', () => current, 'shadowAngle', -180, 180, 1, '°'),
+    slider('sun height', () => current, 'shadowHeight', 5, 85, 1, '°'),
+    slider('darkness', () => current, 'shadowStrength', 0, 1, 0.01),
   ),
-  ...section('test windows', ...windowControls()),
-  ...section('perf test', ...perfControls()),
-  ...section('file', ...fileControls()),
+  ...section('ripples',
+    slider('bend', () => current, 'liquidRefract', 0, 60, 1, 'px'),
+    slider('shine', () => current, 'liquidLight', 0, 1, 0.01),
+    slider('how long', () => current, 'liquidDamping', 0.9, 0.999, 0.001),
+    slider('click splash', () => current, 'liquidClick', 0, 2, 0.01),
+    slider('splash size', () => current, 'liquidSize', 2, 80, 1, 'px'),
+    el('div', 'hint', 'off when the device asks for reduced motion'),
+  ),
+  ...section('testing', sub('test windows'), ...windowControls(), sub('performance'), ...perfControls()),
 ]);
 
 addEventListener('keydown', (e) => {
