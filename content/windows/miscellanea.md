@@ -4,11 +4,12 @@ width: fit
 ---
 # miscellanea, things ive worked on
 
-### machine learning projects
+## machine learning projects
 
-- llm restriction; constraining language models[^sft] at decoding to only use specific tokens
-
-### past visual works
+### llm restriction; constraining language models[^sft]
+- [gadsby-4b](https://huggingface.co/errrinn/Gadsby-4B): gemma-3 4b finetuned on samples banning every token bigram that appears in wikipedia. it evades the ban by using chatspeak and mispelling words
+<br>
+## past visual works
 
 - [lattice organism](https://www.sothebys.com/en/buy/auction/2023/my-body-my-business/lattice-organism)[^lo], 2023
 - [neural triptych](https://www.sothebys.com/en/buy/auction/2024/r-evolutionaries-digital-art-through-the-decade/neural-triptych)[^nt], 2020
