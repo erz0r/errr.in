@@ -1,6 +1,6 @@
 // bakes the loop phones play instead of the live model (site/js/model.js).
 // each frame stacks three grayscale panels, exactly what the renderer reads from the live model:
-// her gray (before levels), her alpha, the shadow's alpha. one loop per model light/fill used by
+// her gray (before levels), her alpha, the shadow's alpha. one loop per model light/fill/shadow angle/height/turn used by
 // settings.json or a preset, since the light changes her gray. needs ffmpeg and a playwright chromium
 // (npx playwright install chromium).
 import { spawn } from 'node:child_process';
@@ -10,7 +10,7 @@ import { chromium } from 'playwright';
 import { loadPresets } from './presets.js';
 
 const NAME = 'erinsona';
-const [W, H, SCALE] = [300, 160, 2]; // the .model box in site.css, at the live model's 2x cap
+const [W, H, SCALE] = [540, 400, 1.5]; // the .model box in site.css with its room for the shadow
 const GAP = 16; // rows between panels; matches LOOP_GAP in renderer.js
 const FPS = 30;
 const CYCLES = 3; // loop length in SitIdle cycles
@@ -20,8 +20,9 @@ const TWITCHES = [{ at: 3.2, who: 0, twice: false }, { at: 7.4, who: 2, twice: t
 
 const settings = [JSON.parse(await readFile('settings.json', 'utf8')), ...(await loadPresets()).map((p) => p.settings)];
 const lights = [...new Map(settings.map((s) => {
-  const [light, fill] = [s.modelLight || 1.3, s.modelFill || 0.5]; // same fallbacks as model.js
-  return [`${light}-${fill}`, { light, fill }];
+  const [light, fill] = [s.modelLight ?? 1.3, s.modelFill ?? 0.5]; // same fallbacks as model.js
+  const [angle, height, turn] = [s.shadowAngle ?? 51, s.shadowHeight ?? 39, s.modelTurn ?? -34];
+  return [[light, fill, angle, height, turn].join('_'), { light, fill, angle, height, turn }];
 })).values()];
 
 const SITE = resolve('site');
@@ -39,12 +40,12 @@ await page.goto('http://bake/');
 
 for (const old of (await readdir('site/media')).filter((f) => f.startsWith(`${NAME}-loop-`))) await rm(join('site/media', old));
 
-for (const { light, fill } of lights) {
-  const info = await page.evaluate(async ({ NAME, W, H, SCALE, GAP, light, fill }) => {
+for (const { light, fill, angle, height, turn } of lights) {
+  const info = await page.evaluate(async ({ NAME, W, H, SCALE, GAP, light, fill, angle, height, turn }) => {
     const THREE = await import('/js/vendor/three.js');
     const { createScene } = await import('/js/model-scene.js');
     const her = document.createElement('canvas');
-    window.her = await createScene(THREE, `/media/${NAME}.glb`, her, { light, fill });
+    window.her = await createScene(THREE, `/media/${NAME}.glb`, her, { light, fill, angle, height, turn });
     window.her.resize(W * SCALE, H * SCALE);
 
     // a webgl1 context that takes her canvas the way renderer.js does and writes the three panels
@@ -104,11 +105,11 @@ void main() {
       return btoa(s);
     };
     return { width: pack.width, height: pack.height, duration: window.her.duration, renderer: THREE.REVISION };
-  }, { NAME, W, H, SCALE, GAP, light, fill });
+  }, { NAME, W, H, SCALE, GAP, light, fill, angle, height, turn });
 
-  const out = `site/media/${NAME}-loop-${light}-${fill}.mp4`;
+  const out = `site/media/${NAME}-loop-${[light, fill, angle, height, turn].join('_')}.mp4`;
   // BAKE_RAW=<file> also keeps the frames uncompressed, for comparing encodings
-  const raw = process.env.BAKE_RAW && (await import('node:fs')).createWriteStream(`${process.env.BAKE_RAW}-${light}-${fill}.gray`);
+  const raw = process.env.BAKE_RAW && (await import('node:fs')).createWriteStream(`${process.env.BAKE_RAW}-${[light, fill, angle, height, turn].join('_')}.gray`);
   const ffmpeg = spawn('ffmpeg', ['-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'gray', '-s', `${info.width}x${info.height}`, '-r', String(FPS), '-i', '-',
     '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '23', '-tune', 'animation', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart', '-an', out], { stdio: ['pipe', 'inherit', 'inherit'] });
   const frames = Math.round(info.duration * CYCLES * FPS);

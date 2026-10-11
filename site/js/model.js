@@ -4,6 +4,12 @@ const win = spot?.closest('.win');
 if (spot && win) {
   const root = document.documentElement;
   const css = (name, fallback) => parseFloat(getComputedStyle(root).getPropertyValue(name)) || fallback;
+  const exact = (name, fallback) => {
+    const v = parseFloat(getComputedStyle(root).getPropertyValue(name));
+    return Number.isNaN(v) ? fallback : v;
+  };
+  const sunAt = () => [exact('--shadow-angle', 51), exact('--shadow-height', 39)];
+  const turnAt = () => exact('--model-turn', -34);
   const shown = () => !win.hidden && document.visibilityState === 'visible';
   const between = (lo, hi) => lo + Math.random() * (hi - lo);
   const send = (detail) => dispatchEvent(new CustomEvent('model:frame', { detail: { spot, ...detail } }));
@@ -14,7 +20,7 @@ if (spot && win) {
   function loopUrl() {
     if (!matchMedia('(hover: none)').matches || new URLSearchParams(location.search).has('tune')) return null;
     const loops = JSON.parse(spot.dataset.loops ?? '{}');
-    return loops[`${css('--model-light', 1.3)},${css('--model-fill', 0.5)}`] ?? null;
+    return loops[[exact('--model-light', 1.3), exact('--model-fill', 0.5), ...sunAt(), turnAt()].join()] ?? null;
   }
 
   function startLoop(src) {
@@ -43,8 +49,13 @@ if (spot && win) {
   async function startLive() {
     const [THREE, { createScene }] = await Promise.all([import(spot.dataset.engine), import(spot.dataset.scene)]);
     const canvas = document.createElement('canvas');
-    const her = await createScene(THREE, spot.dataset.src, canvas, { light: css('--model-light', 1.3), fill: css('--model-fill', 0.5) });
-    addEventListener('tune:apply', () => her.setLight(css('--model-light', 1.3), css('--model-fill', 0.5)));
+    const [angle, height] = sunAt();
+    const her = await createScene(THREE, spot.dataset.src, canvas, { light: css('--model-light', 1.3), fill: css('--model-fill', 0.5), angle, height, turn: turnAt() });
+    addEventListener('tune:apply', () => {
+      her.setLight(exact('--model-light', 1.3), exact('--model-fill', 0.5));
+      her.setShadow(...sunAt());
+      her.setTurn(turnAt());
+    });
 
     const look = { yaw: 0, pitch: 0 }, aim = { yaw: 0, pitch: 0 };
     addEventListener('pointermove', (e) => {
@@ -61,13 +72,16 @@ if (spot && win) {
     const blink = { at: -1e9, twice: false }, twitch = { at: -1e9, who: 0, twice: false };
     let nextBlink = now0 + between(1.5, 4), nextTwitch = now0 + between(2, 5);
     let time = 0, last = performance.now();
+    const FRAME_MS = 1000 / 30;
     const frame = (now) => {
+      if (now - last < FRAME_MS - 2) return void requestAnimationFrame(frame);
       const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
       if (!shown()) return void setTimeout(() => requestAnimationFrame(frame), 250);
       const r = spot.getBoundingClientRect();
-      const scale = Math.min(devicePixelRatio, 2);
-      her.resize(Math.max(1, Math.round(r.width * scale)), Math.max(1, Math.round(r.height * scale)));
+      if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return void requestAnimationFrame(frame);
+      const scale = Math.min(devicePixelRatio, 1.5);
+      her.resize(Math.max(1, Math.round(r.width * scale)), Math.max(1, Math.round(r.height * scale)), true);
       time += dt;
       look.yaw += (aim.yaw - look.yaw) * Math.min(1, dt * 8);
       look.pitch += (aim.pitch - look.pitch) * Math.min(1, dt * 8);
@@ -81,14 +95,15 @@ if (spot && win) {
         nextTwitch = t + 0.8 + between(3, 9);
       }
       her.pose({ time, t, look, blink, twitch });
-      her.draw((layer) => send({ canvas, layer }));
+      her.drawPair();
+      send({ canvas, layer: 'pair' });
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
   }
 
   const check = () => {
-    if (started || win.hidden) return;
+    if (started || win.hidden || !root.classList.contains('gl')) return;
     started = true;
     const loop = loopUrl();
     if (loop) startLoop(loop);

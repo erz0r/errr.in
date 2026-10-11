@@ -1,10 +1,10 @@
 // her scene, shared by the live model (model.js) and the loop baked for phones (dev/bake-model.js)
-export const FOV = 24, DISTANCE = 3.1, HER_ASPECT = 150 / 160;
+export const FOV = 24, DISTANCE = 3.1, HER_ASPECT = 150 / 160, ROOM = 0.75;
 const HEAD_SHARE = 0.35;
 const BLINK = [0.07, 0.05, 0.11];
 const TWITCH = [0.06, 0.16];
 
-export async function createScene(THREE, src, canvas, { light = 1.3, fill = 0.5 } = {}) {
+export async function createScene(THREE, src, canvas, { light = 1.3, fill = 0.5, angle = 51, height = 39, turn: facing = -34 } = {}) {
   const gl = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
   gl.outputColorSpace = THREE.SRGBColorSpace;
   gl.setClearColor(0x000000, 0);
@@ -25,18 +25,22 @@ export async function createScene(THREE, src, canvas, { light = 1.3, fill = 0.5 
   const fillLight = new THREE.HemisphereLight(0xffffff, 0x404040, fill);
   scene.add(key, fillLight);
   const sun = new THREE.DirectionalLight(0xffffff, 0);
-  sun.position.set(2.2, 2.3, 1.8);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.6, bottom: -1.6, near: 0.5, far: 8 });
   scene.add(sun, sun.target);
+  const aimSun = (a, h) => {
+    const [yaw, pitch] = [a * Math.PI / 180, h * Math.PI / 180];
+    sun.position.set(Math.sin(yaw) * Math.cos(pitch) * 3.6, Math.sin(pitch) * 3.6, Math.cos(yaw) * Math.cos(pitch) * 3.6);
+  };
+  aimSun(angle, height);
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.ShadowMaterial({ opacity: 1 }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
   const gltf = await new THREE.GLTFLoader().setMeshoptDecoder(THREE.MeshoptDecoder).loadAsync(src);
-  gltf.scene.rotation.y = -0.6;
+  gltf.scene.rotation.y = facing * Math.PI / 180;
   scene.add(gltf.scene);
   const mixer = new THREE.AnimationMixer(gltf.scene);
   const clip = gltf.animations.find((a) => a.name === 'SitIdle') ?? gltf.animations[0];
@@ -91,11 +95,16 @@ export async function createScene(THREE, src, canvas, { light = 1.3, fill = 0.5 
     head,
     duration: clip?.duration ?? 0,
     setLight(k, f) { key.intensity = k; fillLight.intensity = f; },
-    resize(w, h) {
-      if (canvas.width === w && canvas.height === h) return;
-      gl.setSize(w, h, false);
-      camera.aspect = w / h;
+    setShadow(a, h) { aimSun(a, h); },
+    setTurn(t) { gltf.scene.rotation.y = t * Math.PI / 180; },
+    resize(w, h, pair = false) {
+      if (canvas.width === (pair ? 2 * w : w) && canvas.height === h) return;
+      gl.setSize(pair ? 2 * w : w, h, false);
+      const room = h * ROOM / (1 + 2 * ROOM);
+      const [iw, ih] = [w - 2 * room, h - 2 * room];
+      camera.aspect = iw / ih;
       placeCamera();
+      camera.setViewOffset(iw, ih, -room, -room, w, h);
       camera.updateProjectionMatrix();
     },
     // poses her at animation time `time`; blink and twitch say when the last ones started (seconds, same clock as t)
@@ -112,6 +121,23 @@ export async function createScene(THREE, src, canvas, { light = 1.3, fill = 0.5 
       eyes.forEach((eye, i) => turn(eye, rest[i], look.yaw * (1 - HEAD_SHARE), look.pitch * (1 - HEAD_SHARE)));
     },
     // draws the shadow alone, then her alone, calling back after each so the canvas can be copied
+    drawPair() {
+      const [w, h] = [canvas.width / 2, canvas.height];
+      gl.autoClear = false;
+      gl.setViewport(0, 0, 2 * w, h);
+      gl.clear();
+      gl.shadowMap.needsUpdate = true;
+      floor.visible = true;
+      paint(false);
+      gl.setViewport(0, 0, w, h);
+      gl.render(scene, camera);
+      floor.visible = false;
+      paint(true);
+      gl.setViewport(w, 0, w, h);
+      gl.render(scene, camera);
+      gl.setViewport(0, 0, 2 * w, h);
+      gl.autoClear = true;
+    },
     draw(onLayer) {
       gl.shadowMap.needsUpdate = true;
       floor.visible = true;
