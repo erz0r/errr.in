@@ -1,0 +1,8 @@
+{
+  "updated": "2026-10-11T18:00:00.000Z",
+  "entries": [
+    { "id": "3", "time": "2026-10-11T17:42:00.000Z", "text": "sample entry: the real log fills in from discord once the bot is set up", "images": [] },
+    { "id": "2", "time": "2026-10-11T09:15:00.000Z", "text": "sample entry with an image", "images": [{ "src": "/media/placeholder.svg", "width": 400, "height": 250 }] },
+    { "id": "1", "time": "2026-10-10T22:03:00.000Z", "text": "sample entry, a little older", "images": [] }
+  ]
+}

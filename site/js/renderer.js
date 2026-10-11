@@ -6,6 +6,7 @@
   canvas.setAttribute('aria-hidden', 'true');
   stage.prepend(canvas);
   const scaleParam = Number(new URLSearchParams(location.search).get('scale')) || 0;
+  const pixelScale = () => scaleParam || devicePixelRatio;
 
   const VERTEX = `
 attribute vec2 aPos;
@@ -81,9 +82,10 @@ void main() {
   gl_FragColor = vec4(alive, 0.0, 0.0, 1.0);
 }`;
 
-  const MAIN = (max) => `
+  const MAIN = (max, mode = 0) => `${mode === 1 ? '#extension GL_EXT_draw_buffers : require\n' : ''}
 precision highp float;
 #define MAX ${max}
+#define MODE ${mode}
 uniform vec2 uSize;
 uniform float uScale;
 uniform vec4 uRect[MAX];
@@ -93,12 +95,17 @@ uniform vec4 uFade[MAX];
 uniform float uSpread, uNoiseScale, uPortalReach, uPortalBlur;
 uniform vec4 uTail;
 uniform sampler2D uModel, uModelShadow;
-uniform float uShadowGray;
+uniform float uShadowGray, uShadowStrength;
 uniform vec4 uModelRect;
+uniform vec4 uInset[8];
+uniform float uInsetWin[8];
+uniform int uInsetCount;
+uniform float uInsetBlur, uInsetMix, uInsetInkMix, uInsetTone, uInsetInkTone;
 uniform float uModelWin;
 uniform float uModelPacked;
 uniform vec3 uModelPanel;
-uniform vec3 uModelLevels;
+uniform vec3 uModelLevels, uImageLevels;
+uniform vec2 uImageRange;
 uniform float uDither, uDitherLevels, uDitherScale, uDitherSpread, uDitherPattern;
 uniform float uLife, uLifeAlpha;
 uniform vec4 uLifeFade;
@@ -113,6 +120,8 @@ uniform sampler2D uRamp, uText, uTextSoft, uMedia, uMediaSoft;
 uniform sampler2D uSurface;
 uniform vec2 uLiquidSize;
 uniform float uRefract, uLight;
+uniform sampler2D uCacheA, uCacheB;
+uniform vec2 uCanvas;
 const vec3 GRAY = vec3(0.2126, 0.7152, 0.0722);
 
 float erf(float x) {
@@ -174,6 +183,7 @@ float quantize(float v, float t) {
 }
 
 bool isPopup(vec4 f) { return mod(floor(f.w / 2.0), 2.0) > 0.5; }
+bool isFlat(vec4 f) { return f.w > 3.5; }
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
@@ -224,6 +234,12 @@ float bubbleEdge(vec2 p, vec4 r, float offset, float sigma) {
              softEdge(tailShape(p, r), offset, sigma) * tailFade(p, 8.0, 44.0));
 }
 
+float imageGray(vec4 m) {
+  if (m.a < 0.001) return 0.0;
+  float v = pow(clamp((dot(m.rgb, GRAY) / m.a - uImageLevels.x) / max(uImageLevels.y - uImageLevels.x, 0.001), 0.0, 1.0), 1.0 / max(uImageLevels.z, 0.01));
+  return mix(uImageRange.x, uImageRange.y, v) * m.a;
+}
+
 float hash(vec2 q) { return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 q) {
   vec2 i = floor(q), f = fract(q), u = f * f * (3.0 - 2.0 * f);
@@ -246,126 +262,195 @@ void main() {
   float cellPx = max(uDitherScale, 1.0) * uScale;
   vec2 fc = uLife > 1.5 ? (floor(gl_FragCoord.xy) + 0.5) * cellPx : gl_FragCoord.xy;
   vec2 p = vec2(fc.x, uSize.y * uScale - fc.y) / uScale;
-  bool covered = false;
   vec2 cell = floor(fc / cellPx);
   float steps = max(uDitherLevels - 1.0, 1.0);
+#if MODE != 1
   vec4 water = (texture2D(uSurface, vec2(p.x, uLiquidSize.y - p.y) / uLiquidSize) * 255.0 - 128.0) / 127.0;
   p += vec2(water.y, -water.z) * uRefract;
-  float e = uHaloSize * 0.6, s = max(uHaloSize, 0.5), reach = e + 3.0 * s;
-  float halo[MAX], alpha[MAX];
   // with the game of life on, live cells sit on the page a tone up, under the halos and windows
   // it fades in and out across the page through the same noise as the windows' fades
-  float g = uLife > 0.5 && uLife < 1.5
+  float g0 = uLife > 0.5 && uLife < 1.5
     ? step(0.5, texture2D(uLifeState, (cell + 0.5) / uLifeGrid).r) / steps * fadeAt(uLifeAlpha, p, vec4(0.0, 0.0, uSize), uLifeFade)
     : 0.0;
+#endif
+#if MODE == 2
+  vec4 ca = texture2D(uCacheA, (gl_FragCoord.xy + water.yz * uRefract * uScale) / uCanvas);
+  vec4 cb = texture2D(uCacheB, (gl_FragCoord.xy + water.yz * uRefract * uScale) / uCanvas);
+  float gA = ca.r, gB = ca.g, ink = ca.b, shade = ca.a, box = cb.r, boxInk = cb.g;
+#else
+  bool covered = false;
+  float e = uHaloSize * 0.6, s = max(uHaloSize, 0.5), reach = e + 3.0 * s;
+  float halo[MAX], alpha[MAX];
+  float gA = 1.0, gB = 0.0;
   float ink = 0.0;
   float shade = 0.0;
+  float box = 0.0;
+  float boxInk = 0.0;
 
   for (int i = 0; i < MAX; i++) {
     halo[i] = 0.0;
     vec4 r = uRect[i];
     alpha[i] = i < uCount ? fadeAt(uAlpha[i], p, r, uFade[i]) : 0.0;
     if (i < uCount && p.x > r.x - reach && p.x < r.z + reach && p.y > r.y - reach && p.y < r.w + reach) {
-      if (isPopup(uFade[i])) {
+      if (isFlat(uFade[i])) {
+        halo[i] = alpha[i] * uHaloGlow * blurSpan(p.x, r.x - e, r.z + e, s);
+      } else if (isPopup(uFade[i])) {
         float hs = min(s, 8.0);
         halo[i] = alpha[i] * uHaloGlow * bubbleEdge(p, r, 0.6 * hs, hs);
       } else {
         halo[i] = alpha[i] * uHaloGlow * roundedBlur(r.xy - e, r.zw + e, p, s, 24.0);
       }
-      g += (1.0 - g) * halo[i];
+      gA *= 1.0 - halo[i];
+      gB += (1.0 - gB) * halo[i];
     }
   }
 
   for (int i = 0; i < MAX; i++) {
+    if (i >= uCount) break;
     vec4 r = uRect[i];
     vec2 size = max(r.zw - r.xy, vec2(1.0)), d = p - r.xy;
-    if (i < uCount) {
-      float glow = uStackGlow, feather = uFeather, sd = 0.0;
-      bool popup = isPopup(uFade[i]);
-      if (popup) {
-        feather = mix(20.0, min(uFeather, 4.0), tailTaper(p, r, 8.0, 44.0));
-        sd = bubble(p, r);
-        float clear = alpha[i] * bubbleEdge(p, r, uPortalReach, max(uPortalBlur, 0.5));
-        g *= 1.0 - clear;
-        ink *= 1.0 - clear;
-        shade *= 1.0 - clear;
-        glow = 1.0;
+    bool popup = isPopup(uFade[i]);
+    float sd = popup ? bubble(p, r) : 0.0;
+    float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
+    float hg = halo[i] * (popup ? 1.0 : uStackGlow);
+    if (alpha[i] <= 0.0 || (hg <= 0.0 && !popup && inRect < 0.5)) continue;
+    float feather = uFeather;
+    bool level = isFlat(uFade[i]);
+    float edge = 1.0;
+    if (level) {
+      edge = smoothstep(0.0, 1.0, clamp(min(d.x, size.x - d.x) / max(3.0 * uFeather, 1.0), 0.0, 1.0));
+    }
+    if (popup) {
+      feather = mix(20.0, min(uFeather, 4.0), tailTaper(p, r, 8.0, 44.0));
+      float clear = alpha[i] * bubbleEdge(p, r, uPortalReach, max(uPortalBlur, 0.5));
+      gA *= 1.0 - clear;
+      gB *= 1.0 - clear;
+      ink *= 1.0 - clear;
+      shade *= 1.0 - clear;
+      box *= 1.0 - clear;
+      boxInk *= 1.0 - clear;
+    }
+    gA *= 1.0 - hg;
+    gB += (1.0 - gB) * hg;
+    ink *= 1.0 - hg;
+    shade *= 1.0 - hg;
+    box *= 1.0 - hg;
+    boxInk *= 1.0 - hg;
+    if (popup ? sd < 0.0 : inRect > 0.5) {
+      covered = true;
+      // only pixels inside a window read its textures
+      vec2 uv = mix(uArea[i].xy, uArea[i].zw, clamp(d / size, 0.0, 1.0));
+      vec4 t = texture2D(uText, uv) * inRect, ts = texture2D(uTextSoft, uv) * inRect;
+      vec4 m = texture2D(uMedia, uv) * inRect, ms = texture2D(uMediaSoft, uv) * inRect;
+      float tip = popup ? tailTaper(p, r, 0.0, 36.0) : 1.0;
+      float fade = (level ? edge : popup ? clamp(-sd / max(feather, 0.5), 0.0, 1.0) * tip : cssFade(d.x, size.x, feather) * cssFade(d.y, size.y, feather)) * alpha[i];
+      float cover = popup || level ? 1.0 : blurSpan(p.x, r.x, r.z, uBlur) * blurSpan(p.y, r.y, r.w, uBlur);
+      float soft = cover * uBg + imageGray(ms) - ms.a * uBg + ts.r * (uInk - uBg);
+      float k = 1.0 - cover * fade;
+      gA *= k;
+      gB = gB * k + soft * fade;
+      ink *= k;
+      shade *= k;
+      box *= k;
+      boxInk *= k;
+      float sharp = (level ? edge : popup ? clamp(-sd / max(2.0 * feather, 0.5), 0.0, 1.0) * tip : cssFade(d.x, size.x, 2.0 * feather) * cssFade(d.y, size.y, 2.0 * feather)) * alpha[i];
+      float sect = 0.0;
+      for (int n = 0; n < 8; n++) {
+        if (n >= uInsetCount) break;
+        if (abs(uInsetWin[n] - float(i)) < 0.5) {
+          vec4 q = uInset[n];
+          if (p.x > q.x - 3.0 * uInsetBlur && p.x < q.z + 3.0 * uInsetBlur && p.y > q.y - 3.0 * uInsetBlur && p.y < q.w + 3.0 * uInsetBlur) {
+            sect = max(sect, blurSpan(p.x, q.x, q.z, uInsetBlur) * blurSpan(p.y, q.y, q.w, uInsetBlur));
+          }
+        }
       }
-      g += (1.0 - g) * halo[i] * glow;
-      ink *= 1.0 - halo[i] * glow;
-      shade *= 1.0 - halo[i] * glow;
-      float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
-      if (popup ? sd < 0.0 : inRect > 0.5) {
-        covered = true;
-        // only pixels inside a window read its textures
-        vec2 uv = mix(uArea[i].xy, uArea[i].zw, clamp(d / size, 0.0, 1.0));
-        vec4 t = texture2D(uText, uv) * inRect, ts = texture2D(uTextSoft, uv) * inRect;
-        vec4 m = texture2D(uMedia, uv) * inRect, ms = texture2D(uMediaSoft, uv) * inRect;
-        float tip = popup ? tailTaper(p, r, 0.0, 36.0) : 1.0;
-        float fade = (popup ? clamp(-sd / max(feather, 0.5), 0.0, 1.0) * tip : cssFade(d.x, size.x, feather) * cssFade(d.y, size.y, feather)) * alpha[i];
-        float cover = popup ? 1.0 : blurSpan(p.x, r.x, r.z, uBlur) * blurSpan(p.y, r.y, r.w, uBlur);
-        float soft = cover * uBg + dot(ms.rgb, GRAY) - ms.a * uBg + ts.r * (uInk - uBg);
-        g = g * (1.0 - cover * fade) + soft * fade;
-        ink *= 1.0 - cover * fade;
-        shade *= 1.0 - cover * fade;
-        float sharp = (popup ? clamp(-sd / max(2.0 * feather, 0.5), 0.0, 1.0) * tip : cssFade(d.x, size.x, 2.0 * feather) * cssFade(d.y, size.y, 2.0 * feather)) * alpha[i];
-        float content = uBg * (1.0 - m.a) + dot(m.rgb, GRAY);
-        content = mix(content, uInk, t.r);
-        g = mix(g, content, sharp);
-        ink = mix(ink, t.r, sharp);
-        shade *= 1.0 - sharp;
-        if (abs(float(i) - uModelWin) < 0.5) {
-          vec2 mu = (p - uModelRect.xy) / max(uModelRect.zw - uModelRect.xy, vec2(1.0));
-          float inModel = step(0.0, mu.x) * step(mu.x, 1.0) * step(0.0, mu.y) * step(mu.y, 1.0);
-          vec2 mc = clamp(mu, 0.0, 1.0);
+      float content = uBg * (1.0 - m.a) + imageGray(m);
+      content = mix(content, uInk, t.r);
+      gA *= 1.0 - sharp;
+      gB = mix(gB, content, sharp);
+      ink = mix(ink, t.r, sharp);
+      shade *= 1.0 - sharp;
+      box = mix(box, sect * (1.0 - m.a), sharp);
+      boxInk = mix(boxInk, sect * t.r, sharp);
+      if (abs(float(i) - uModelWin) < 0.5) {
+        vec2 mu = (p - uModelRect.xy) / max(uModelRect.zw - uModelRect.xy, vec2(1.0));
+        if (mu.x >= 0.0 && mu.x <= 1.0 && mu.y >= 0.0 && mu.y <= 1.0) {
           float ma, sa, mg;
           if (uModelPacked > 0.5) {
             // a baked loop frame: her gray, her alpha and the shadow's alpha, stacked top to bottom
-            vec2 cell = vec2(mc.x, clamp(mc.y, uModelPanel.z, 1.0 - uModelPanel.z) * uModelPanel.x);
-            mg = texture2D(uModel, cell).r * inModel;
-            ma = texture2D(uModel, cell + vec2(0.0, uModelPanel.y)).r * inModel;
-            sa = texture2D(uModel, cell + vec2(0.0, 2.0 * uModelPanel.y)).r * inModel;
+            vec2 cell = vec2(mu.x, clamp(mu.y, uModelPanel.z, 1.0 - uModelPanel.z) * uModelPanel.x);
+            mg = texture2D(uModel, cell).r;
+            ma = texture2D(uModel, cell + vec2(0.0, uModelPanel.y)).r;
+            sa = texture2D(uModel, cell + vec2(0.0, 2.0 * uModelPanel.y)).r;
           } else {
-            vec4 mm = texture2D(uModel, mc) * inModel;
-            sa = texture2D(uModelShadow, mc).a * inModel;
+            vec4 mm = texture2D(uModel, vec2(0.502 + 0.496 * mu.x, mu.y));
+            sa = texture2D(uModel, vec2(0.002 + 0.496 * mu.x, mu.y)).a;
             ma = mm.a;
             mg = mm.a > 0.001 ? dot(mm.rgb / mm.a, GRAY) : 0.0;
           }
           mg = pow(clamp((mg - uModelLevels.x) / max(uModelLevels.y - uModelLevels.x, 0.001), 0.0, 1.0), 1.0 / max(uModelLevels.z, 0.01));
-          g = mix(g, uShadowGray, sa * fade);
-          ink *= 1.0 - sa * fade;
-          shade = mix(shade, 1.0, sa * fade);
-          g = mix(g, mg, ma * fade);
-          shade *= 1.0 - ma * fade;
-          ink *= 1.0 - ma * fade;
+          sa *= uShadowStrength * fade;
+          ma *= fade;
+          gA *= 1.0 - sa;
+          gB = mix(gB, uShadowGray, sa);
+          ink *= 1.0 - sa;
+          shade = mix(shade, 1.0, sa);
+          box *= 1.0 - sa;
+          boxInk *= 1.0 - sa;
+          gA *= 1.0 - ma;
+          gB = mix(gB, mg, ma);
+          shade *= 1.0 - ma;
+          ink *= 1.0 - ma;
+          box *= 1.0 - ma;
+          boxInk *= 1.0 - ma;
         }
-        g = mix(g, uInk, t.r * uOverlay * alpha[i]);
-        ink = mix(ink, 1.0, t.r * uOverlay * alpha[i]);
-        shade *= 1.0 - t.r * uOverlay * alpha[i];
       }
+      float over = t.r * uOverlay * alpha[i];
+      gA *= 1.0 - over;
+      gB = mix(gB, uInk, over);
+      ink = mix(ink, 1.0, over);
+      shade *= 1.0 - over;
+      boxInk = mix(boxInk, sect, over);
     }
   }
+#endif
 
-  g = clamp(g + water.x * uLight, 0.0, 1.0);
+#if MODE == 1
+  gl_FragData[0] = vec4(gA, gB, ink, shade);
+  gl_FragData[1] = vec4(box, boxInk, 0.0, 1.0);
+#else
+  float g = clamp(g0 * gA + gB + water.x * uLight, 0.0, 1.0);
+#if MODE == 0
   if (uLife > 1.5) {
     // the first generation: background dither cells that round up a tone start alive
     float q = quantize(g, threshold(cell));
     gl_FragColor = covered ? vec4(0.0, 1.0, 0.0, 1.0) : vec4(step(floor(g * steps) / steps + 0.5 / steps, q), 0.0, 0.0, 1.0);
     return;
   }
+#endif
   if (uDither > 0.0) g = mix(g, quantize(g, threshold(cell)), uDither);
   vec3 color = uMapOn > 0.5 ? texture2D(uRamp, vec2((g * 255.0 + 0.5) / 256.0, 0.5)).rgb : vec3(g);
-  if (uMapOn > 0.5) color = mix(color, uInkColor, ink * uInkOverride);
-  if (uMapOn > 0.5) color = mix(color, texture2D(uRamp, vec2((uShadowGray * 255.0 + 0.5) / 256.0, 0.5)).rgb, shade);
+  if (uMapOn > 0.5) {
+    float tint = clamp(box * uInsetMix, 0.0, 1.0);
+    if (uDither > 0.0) tint = mix(tint, step(threshold(cell), tint - 0.001), uDither);
+    tint *= 1.0 - clamp(ink, 0.0, 1.0);
+    if (tint > 0.0) color = mix(color, texture2D(uRamp, vec2((uInsetTone * 255.0 + 0.5) / 256.0, 0.5)).rgb, tint);
+    color = mix(color, uInkColor, ink * uInkOverride);
+    float boxText = clamp(boxInk * uInsetInkMix, 0.0, 1.0);
+    if (boxText > 0.0) color = mix(color, texture2D(uRamp, vec2((uInsetInkTone * 255.0 + 0.5) / 256.0, 0.5)).rgb, boxText);
+    if (shade > 0.0) color = mix(color, texture2D(uRamp, vec2((uShadowGray * 255.0 + 0.5) / 256.0, 0.5)).rgb, shade);
+  }
   gl_FragColor = vec4(color, 1.0);
+#endif
 }`;
 
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
-    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uModelRect', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight', 'uLife', 'uLifeState', 'uLifeGrid', 'uLifeAlpha', 'uLifeFade'];
+    'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uShadowStrength', 'uModelRect', 'uInset', 'uInsetWin', 'uInsetCount', 'uInsetBlur', 'uInsetMix', 'uInsetInkMix', 'uInsetTone', 'uInsetInkTone', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uImageLevels', 'uImageRange', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight', 'uLife', 'uLifeState', 'uLifeGrid', 'uLifeAlpha', 'uLifeFade', 'uCacheA', 'uCacheB', 'uCanvas'];
   const LOOP_GAP = 16;
   const LIFE_UNIT = 8;
   const UNITS = { uRamp: 0, uText: 1, uTextSoft: 2, uMedia: 3, uMediaSoft: 4, uSurface: 5, uModel: 6, uModelShadow: 7 };
+  const CACHE_UNITS = [9, 10];
 
   let gl = null;
   let blurProgram = null;
@@ -375,6 +460,7 @@ void main() {
   let atlas = null;
   let atlasDirty = true;
   let stepProgram = null, surfaceProgram = null, lifeProgram = null;
+  let drawBuffers = null, composite = null, cache = null, stale = true;
   const model = { tex: null, shadow: null, spot: null, panel: null };
   let liquid = null;
   let stillWater = null;
@@ -392,6 +478,10 @@ void main() {
     gl.attachShader(program, shader(gl.FRAGMENT_SHADER, fragment));
     gl.bindAttribLocation(program, 0, 'aPos');
     gl.linkProgram(program);
+    for (const attached of gl.getAttachedShaders(program) ?? []) {
+      gl.detachShader(program, attached);
+      gl.deleteShader(attached);
+    }
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
     const uniform = {};
     for (const name of uniforms) {
@@ -405,10 +495,74 @@ void main() {
     while (capacity < count && capacity < maxCapacity) capacity *= 2;
     capacity = Math.min(capacity, maxCapacity);
     if (main?.capacity === capacity) return;
+    let next;
+    try {
+      next = { ...compile(MAIN(capacity), MAIN_UNIFORMS), capacity };
+    } catch (err) {
+      if (!main) throw err;
+      console.warn('keeping fewer window slots:', err);
+      maxCapacity = main.capacity;
+      return;
+    }
     if (main) gl.deleteProgram(main.program);
-    main = { ...compile(MAIN(capacity), MAIN_UNIFORMS), capacity };
+    if (main?.cache) gl.deleteProgram(main.cache.program);
+    main = next;
     gl.useProgram(main.program);
     for (const [name, unit] of Object.entries(UNITS)) gl.uniform1i(main.uniform[name], unit);
+    if (!drawBuffers) return;
+    try {
+      main.cache = compile(MAIN(capacity, 1), MAIN_UNIFORMS);
+      gl.useProgram(main.cache.program);
+      for (const [name, unit] of Object.entries(UNITS)) gl.uniform1i(main.cache.uniform[name], unit);
+    } catch (err) {
+      console.warn('no cached rendering:', err);
+      main.cache = null;
+      drawBuffers = null;
+    }
+  }
+
+  function warmUp() {
+    if (!main?.cache || !composite || !gl || gl.isContextLost()) return;
+    const [a, b] = [newTexture(1, 1), newTexture(1, 1)];
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, drawBuffers.COLOR_ATTACHMENT0_WEBGL, gl.TEXTURE_2D, a, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, drawBuffers.COLOR_ATTACHMENT1_WEBGL, gl.TEXTURE_2D, b, 0);
+    drawBuffers.drawBuffersWEBGL([drawBuffers.COLOR_ATTACHMENT0_WEBGL, drawBuffers.COLOR_ATTACHMENT1_WEBGL]);
+    gl.viewport(0, 0, 1, 1);
+    for (const unit of [...Object.values(UNITS), ...CACHE_UNITS]) {
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, stillWater);
+    }
+    gl.useProgram(main.cache.program);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    drawBuffers.drawBuffersWEBGL([drawBuffers.COLOR_ATTACHMENT0_WEBGL, gl.NONE]);
+    gl.useProgram(composite.program);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fb);
+    gl.deleteTexture(a);
+    gl.deleteTexture(b);
+    requestRender();
+  }
+
+  function ensureCache(w, h) {
+    if (cache?.w === w && cache?.h === h) return false;
+    if (cache) {
+      gl.deleteTexture(cache.a);
+      gl.deleteTexture(cache.b);
+      gl.deleteFramebuffer(cache.fb);
+    }
+    gl.activeTexture(gl.TEXTURE0 + CACHE_UNITS[0]);
+    const [a, b] = [newTexture(w, h), newTexture(w, h)];
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, drawBuffers.COLOR_ATTACHMENT0_WEBGL, gl.TEXTURE_2D, a, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, drawBuffers.COLOR_ATTACHMENT1_WEBGL, gl.TEXTURE_2D, b, 0);
+    drawBuffers.drawBuffersWEBGL([drawBuffers.COLOR_ATTACHMENT0_WEBGL, drawBuffers.COLOR_ATTACHMENT1_WEBGL]);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    cache = { w, h, a, b, fb };
+    return true;
   }
 
   function newTexture(width, height, source = null, filter = gl.LINEAR) {
@@ -436,13 +590,30 @@ void main() {
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-      maxCapacity = Math.min(64, Math.floor((gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) - 20) / 4));
+      maxCapacity = Math.min(64, Math.floor((gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) - 40) / 4));
       blurProgram = compile(BLUR, ['uSrc', 'uSize', 'uDir', 'uSigma']);
       stepProgram = compile(LIQUID_STEP, ['uState', 'uGrid', 'uDamping', 'uDrops']);
       surfaceProgram = compile(LIQUID_SURFACE, ['uState', 'uGrid']);
       lifeProgram = compile(LIFE_STEP, ['uState', 'uGrid']);
       if (gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) > LIFE_UNIT) UNITS.uLifeState = LIFE_UNIT;
       life = null;
+      model.tex = null;
+      model.size = null;
+      cache = null;
+      composite = null;
+      drawBuffers = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) > Math.max(...CACHE_UNITS) ? gl.getExtension('WEBGL_draw_buffers') : null;
+      if (drawBuffers) {
+        try {
+          composite = compile(MAIN(1, 2), MAIN_UNIFORMS);
+          gl.useProgram(composite.program);
+          for (const [name, unit] of Object.entries(UNITS)) gl.uniform1i(composite.uniform[name], unit);
+          gl.uniform1i(composite.uniform.uCacheA, CACHE_UNITS[0]);
+          gl.uniform1i(composite.uniform.uCacheB, CACHE_UNITS[1]);
+        } catch (err) {
+          console.warn('no cached rendering:', err);
+          drawBuffers = null;
+        }
+      }
       stillWater = newTexture(1, 1, new Uint8Array([128, 128, 128, 255]));
       liquid = null;
       main = null;
@@ -452,6 +623,7 @@ void main() {
       atlasDirty = true;
       readSettings();
       root.classList.add('gl');
+      (window.requestIdleCallback ?? setTimeout)(warmUp, { timeout: 3000 });
       return true;
     } catch (err) {
       console.warn('WebGL renderer unavailable, using the flat fallback:', err);
@@ -473,10 +645,16 @@ void main() {
       portalReach: num('--portal-reach'), portalBlur: num('--portal-blur'),
       dither: num('--dither-amount') || 0, ditherLevels: num('--dither-levels') || 4, ditherScale: num('--dither-scale') || 2,
       ditherSpread: num('--dither-spread'),
+      imageFadeX: num('--image-fade-x') || 0, imageFadeY: num('--image-fade-y') || 0,
+      imageLevels: [num('--image-black') || 0, Number.isNaN(num('--image-white')) ? 1 : num('--image-white'), num('--image-gamma') || 1],
+      imageRange: [num('--image-from') || 0, Number.isNaN(num('--image-to')) ? 1 : num('--image-to')],
       modelLevels: [num('--model-black') || 0, Number.isNaN(num('--model-white')) ? 1 : num('--model-white'), num('--model-gamma') || 1],
       ditherPattern: Math.max(0, ['bayer2', 'bayer4', 'bayer8', 'noise', 'lines', 'diagonal'].indexOf(css.getPropertyValue('--dither-pattern').trim())),
       refract: num('--liquid-refract'), light: num('--liquid-light'), damping: num('--liquid-damping'),
       click: num('--liquid-click'), splash: num('--liquid-size'),
+      shadowStrength: Number.isNaN(num('--shadow-strength')) ? 1 : num('--shadow-strength'),
+      insetMix: num('--inset-mix') || 0, insetInkMix: num('--inset-ink-mix') || 0,
+      insetTone: num('--inset-tone') || 0, insetInkTone: num('--inset-ink-tone') || 0, insetBlur: num('--inset-blur') || 0,
     };
     const hex = root.dataset.ramp;
     const ramp = new Uint8Array(256 * 4);
@@ -496,8 +674,34 @@ void main() {
 
   const rasters = new Map();
 
+  function softImage(ctx, img, r) {
+    const k = ctx.getTransform().a || 1;
+    const c = document.createElement('canvas');
+    [c.width, c.height] = [Math.max(1, Math.ceil(r.width * k)), Math.max(1, Math.ceil(r.height * k))];
+    const t = c.getContext('2d');
+    t.drawImage(img, 0, 0, c.width, c.height);
+    t.globalCompositeOperation = 'destination-in';
+    const fade = (length, edge, along) => {
+      if (!(edge > 0)) return;
+      const f = Math.min(edge * k, length / 2) / length;
+      const g = along ? t.createLinearGradient(0, 0, c.width, 0) : t.createLinearGradient(0, 0, 0, c.height);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(f * 0.5, 'rgba(0,0,0,0.5)');
+      g.addColorStop(f, '#000');
+      g.addColorStop(1 - f, '#000');
+      g.addColorStop(1 - f * 0.5, 'rgba(0,0,0,0.5)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      t.fillStyle = g;
+      t.fillRect(0, 0, c.width, c.height);
+    };
+    fade(c.width, settings.imageFadeX, true);
+    fade(c.height, settings.imageFadeY, false);
+    ctx.drawImage(c, r.left, r.top, r.width, r.height);
+  }
+
   function drawImage(ctx, img) {
     const r = img.getBoundingClientRect();
+    if (img.closest('.log')) return softImage(ctx, img, r);
     const fit = getComputedStyle(img).objectFit;
     if (fit !== 'contain' && fit !== 'cover') return ctx.drawImage(img, r.left, r.top, r.width, r.height);
     const k = (fit === 'cover' ? Math.max : Math.min)(r.width / img.naturalWidth, r.height / img.naturalHeight);
@@ -609,6 +813,19 @@ void main() {
           y += lineHeight;
         }
         ctx.restore();
+      }
+    }
+
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    for (const hr of win.querySelectorAll('hr')) {
+      const r = hr.getBoundingClientRect();
+      if (!r.width) continue;
+      const y = Math.round(r.top + r.height / 2) - 1;
+      for (let row = 0; row < 2; row++) {
+        for (let i = row, x = r.left + row; x < r.right; i += 2, x += 2) {
+          const fromEnd = Math.min(x - r.left, r.right - x) / (r.width * 0.3);
+          if (Math.min(1, fromEnd) * 16 > BAYER[(row * 4 + (i >> 1)) % 16]) ctx.fillRect(x, y + row, 1, 1);
+        }
       }
     }
 
@@ -811,15 +1028,18 @@ void main() {
     requestAnimationFrame(tick);
   }
   function tick(now) {
-    if (!gl || gl.isContextLost() || !liquidOn()) { animating = false; dropLiquid(); requestRender(); return; }
+    if (!gl || gl.isContextLost() || !liquidOn()) { animating = false; dropLiquid(); requestComposite(); return; }
     ensureLiquid(stage.getBoundingClientRect());
     owed = Math.min(owed + now - lastTime, 4 * STEP_MS);
     lastTime = now;
-    for (; owed >= STEP_MS; owed -= STEP_MS) stepLiquid();
-    updateSurface();
-    requestRender();
+    let stepped = false;
+    for (; owed >= STEP_MS; owed -= STEP_MS) { stepLiquid(); stepped = true; }
+    if (stepped) {
+      updateSurface();
+      requestComposite();
+    }
     if (now - lastSplash < settleMs()) requestAnimationFrame(tick);
-    else { animating = false; dropLiquid(); requestRender(); }
+    else { animating = false; dropLiquid(); requestComposite(); }
   }
 
   stage.addEventListener('pointerdown', (e) => {
@@ -832,10 +1052,10 @@ void main() {
   // and three more turn it back. windows keep their own dithering; the game runs on under them too.
   const GENERATIONS_PER_SECOND = 15;
   let life = null;
-  const lifeCell = () => Math.max(settings.ditherScale, 1) * (scaleParam || devicePixelRatio);
+  const lifeCell = () => Math.max(settings.ditherScale, 1) * pixelScale();
   function startLife() {
     const box = stage.getBoundingClientRect(), cellPx = lifeCell();
-    const [cols, rows] = [Math.ceil(box.width * (scaleParam || devicePixelRatio) / cellPx), Math.ceil(box.height * (scaleParam || devicePixelRatio) / cellPx)];
+    const [cols, rows] = [Math.ceil(box.width * pixelScale() / cellPx), Math.ceil(box.height * pixelScale() / cellPx)];
     const state = [0, 1].map(() => newTexture(cols, rows, null, gl.NEAREST));
     const fbs = state.map((tex) => {
       const fb = gl.createFramebuffer();
@@ -866,7 +1086,7 @@ void main() {
     life.state.forEach((tex) => gl.deleteTexture(tex));
     life.fbs.forEach((fb) => gl.deleteFramebuffer(fb));
     life = null;
-    requestRender();
+    requestComposite();
   }
   // a nearly empty background (or one that has died out) gets a few patches of random soup
   function topUp(first) {
@@ -920,14 +1140,16 @@ void main() {
     if (now - life.checked > 3000) { life.checked = now; topUp(false); }
     const alpha = lifeAlpha(now), fading = alpha !== life.fade.to;
     if (!fading && life.fade.to === 0) return stopLife();
-    if (stepped || fading || alpha !== life.drawnAlpha) requestRender();
+    if (stepped || fading || alpha !== life.drawnAlpha) requestComposite();
     life.drawnAlpha = alpha;
     requestAnimationFrame(stepLife);
   }
 
   let taps = [];
   stage.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.win:not([data-shape])') || !gl || !UNITS.uLifeState) return;
+    const win = e.target.closest('.win:not([data-shape])');
+    const empty = win?.hasAttribute('data-flat') && !e.target.closest('a, button, textarea, p, li, h1, h2, h3, img, time, hr');
+    if ((win && !empty) || !gl || !UNITS.uLifeState) return;
     taps = [...taps.filter((t) => e.timeStamp - t.at < 600 && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 40), { at: e.timeStamp, x: e.clientX, y: e.clientY }];
     if (taps.length < 3) return;
     taps = [];
@@ -937,21 +1159,30 @@ void main() {
 
   // everything that changes the picture asks for a frame here, so it's drawn at most once per display frame.
   // a region (stage px) redraws only that box, if nothing else asked for the whole page.
-  let queued = null, scheduled = false, fullSize = '';
+  let queued = null, scheduled = false, fullSize = '', recompose = false;
   function requestRender(region = null) {
     queued = !region || queued === 'all' ? 'all' : queued ? unite(queued, region) : region;
+    schedule();
+  }
+  function requestComposite() {
+    recompose = true;
+    schedule();
+  }
+  function schedule() {
     if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(() => {
       scheduled = false;
-      const r = queued;
+      const [r, c] = [queued, recompose];
       queued = null;
-      if (r) render(r === 'all' ? null : r);
+      recompose = false;
+      if (r) render(r === 'all' ? null : r, { compositeFull: c });
+      else if (c) render(null, { compositeOnly: true });
     });
   }
   const unite = (a, b) => ({ x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) });
 
-  function render(region = null, { seed = false } = {}) {
+  function render(region = null, { seed = false, compositeOnly = false, compositeFull = false } = {}) {
     if (!gl || gl.isContextLost()) return;
     if (!region && !seed) queued = null;
     const box = stage.getBoundingClientRect();
@@ -962,20 +1193,21 @@ void main() {
     for (const win of drawn) if (!rasters.has(win) && !isColumn(win)) rasterize(win);
     if (atlasDirty || atlas.blur !== settings.blur) buildAtlas();
 
-    const scale = scaleParam || devicePixelRatio;
+    const scale = pixelScale();
     const [w, h] = [Math.round(box.width * scale), Math.round(box.height * scale)];
     if (canvas.width !== w || canvas.height !== h) [canvas.width, canvas.height] = [w, h];
     gl.viewport(0, 0, w, h);
     const size = `${w}x${h}`;
+    let clip = null;
     if (seed) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, life.fbs[life.read]);
       gl.viewport(0, 0, life.cols, life.rows);
     } else if (region && size === fullSize) {
       const [x0, y0] = [Math.max(0, Math.floor(region.x0 * scale) - 2), Math.max(0, Math.floor(region.y0 * scale) - 2)];
       const [x1, y1] = [Math.min(w, Math.ceil(region.x1 * scale) + 2), Math.min(h, Math.ceil(region.y1 * scale) + 2)];
-      if (x1 <= x0 || y1 <= y0) return;
-      gl.enable(gl.SCISSOR_TEST);
-      gl.scissor(x0, h - y1, x1 - x0, y1 - y0);
+      if (x1 > x0 && y1 > y0) clip = [x0, h - y1, x1 - x0, y1 - y0];
+      else if (compositeFull) compositeOnly = true;
+      else return;
     } else {
       fullSize = size;
     }
@@ -993,6 +1225,7 @@ void main() {
       areas.set(atlas.areas.get(win) ?? [0, 0, 0, 0], i * 4);
       alphas[i] = win.style.opacity === '' ? 1 : Number(win.style.opacity);
       if (win.dataset.fadeSeed) patterns.set(win.dataset.fadeSeed.split(',').map(Number), i * 4);
+      if (win.hasAttribute('data-flat')) patterns[i * 4 + 3] += 4;
       if (win.hasAttribute('data-popup')) {
         patterns[i * 4 + 3] += 2;
         const [tx, ty, b0, b1] = (win.dataset.tail ?? '').split(',').map(Number);
@@ -1000,7 +1233,6 @@ void main() {
       }
     });
 
-    gl.useProgram(main.program);
     const textures = {
       uRamp: rampTex, uText: atlas.text, uTextSoft: atlas.textSoft, uMedia: atlas.media, uMediaSoft: atlas.mediaSoft,
       uSurface: liquid ? liquid.surface : stillWater,
@@ -1013,51 +1245,108 @@ void main() {
       gl.activeTexture(gl.TEXTURE0 + unit);
       gl.bindTexture(gl.TEXTURE_2D, textures[name]);
     }
-    const u = main.uniform;
-    gl.uniform2f(u.uSize, box.width, box.height);
-    gl.uniform1f(u.uScale, scale);
-    gl.uniform4fv(u.uRect, rects);
-    gl.uniform4fv(u.uArea, areas);
-    gl.uniform1fv(u.uAlpha, alphas);
-    gl.uniform4fv(u.uFade, patterns);
-    gl.uniform1f(u.uSpread, settings.spread);
-    gl.uniform1f(u.uNoiseScale, settings.noiseScale);
-    gl.uniform1f(u.uPortalReach, settings.portalReach);
-    gl.uniform1f(u.uPortalBlur, settings.portalBlur);
-    gl.uniform4fv(u.uTail, tail);
-    gl.uniform1f(u.uDither, settings.dither);
-    gl.uniform1f(u.uDitherLevels, settings.ditherLevels);
-    gl.uniform1f(u.uDitherScale, settings.ditherScale);
-    gl.uniform1f(u.uDitherSpread, Number.isNaN(settings.ditherSpread) ? 1 : settings.ditherSpread);
-    gl.uniform1f(u.uDitherPattern, settings.ditherPattern);
-    const modelWin = model.tex && model.spot ? drawn.indexOf(model.spot.closest('.win')) : -1;
-    const mr = model.spot?.getBoundingClientRect();
-    gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top, mr.right - box.left, mr.bottom - box.top] : [0, 0, 0, 0]));
-    gl.uniform1f(u.uModelWin, modelWin);
-    gl.uniform1f(u.uModelPacked, model.panel ? 1 : 0);
-    gl.uniform3f(u.uModelPanel, ...(model.panel ?? [1, 0, 0]));
-    gl.uniform3f(u.uModelLevels, ...settings.modelLevels);
-    gl.uniform1f(u.uShadowGray, settings.shadowGray);
-    gl.uniform1i(u.uCount, drawn.length);
-    gl.uniform1f(u.uFeather, settings.feather);
-    gl.uniform1f(u.uBlur, settings.blur);
-    gl.uniform1f(u.uHaloSize, settings.haloSize);
-    gl.uniform1f(u.uHaloGlow, settings.haloGlow);
-    gl.uniform1f(u.uStackGlow, settings.stackGlow);
-    gl.uniform1f(u.uOverlay, settings.overlay);
-    gl.uniform1f(u.uBg, settings.bg);
-    gl.uniform1f(u.uInk, settings.ink);
-    gl.uniform3f(u.uInkColor, ...(settings.inkColor.length === 3 ? settings.inkColor : [1, 1, 1]));
-    gl.uniform1f(u.uInkOverride, settings.inkOverride);
-    gl.uniform1f(u.uMapOn, stage.dataset.map === 'off' ? 0 : 1);
-    gl.uniform2f(u.uLiquidSize, liquid ? liquid.cols * CELL : 1, liquid ? liquid.rows * CELL : 1);
-    gl.uniform1f(u.uRefract, settings.refract);
-    gl.uniform1f(u.uLight, settings.light);
-    gl.uniform1f(u.uLife, seed ? 2 : life ? 1 : 0);
-    gl.uniform1f(u.uLifeAlpha, life?.fade ? lifeAlpha(performance.now()) : 0);
-    gl.uniform4fv(u.uLifeFade, life?.fade?.pattern ?? [0, 0, 0, 0]);
-    gl.uniform2f(u.uLifeGrid, life?.cols ?? 1, life?.rows ?? 1);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const send = (prog) => {
+      gl.useProgram(prog.program);
+      const u = prog.uniform;
+      gl.uniform2f(u.uSize, box.width, box.height);
+      gl.uniform1f(u.uScale, scale);
+      gl.uniform4fv(u.uRect, rects);
+      gl.uniform4fv(u.uArea, areas);
+      gl.uniform1fv(u.uAlpha, alphas);
+      gl.uniform4fv(u.uFade, patterns);
+      gl.uniform1f(u.uSpread, settings.spread);
+      gl.uniform1f(u.uNoiseScale, settings.noiseScale);
+      gl.uniform1f(u.uPortalReach, settings.portalReach);
+      gl.uniform1f(u.uPortalBlur, settings.portalBlur);
+      gl.uniform4fv(u.uTail, tail);
+      gl.uniform1f(u.uDither, settings.dither);
+      gl.uniform1f(u.uDitherLevels, settings.ditherLevels);
+      gl.uniform1f(u.uDitherScale, settings.ditherScale);
+      gl.uniform1f(u.uDitherSpread, Number.isNaN(settings.ditherSpread) ? 1 : settings.ditherSpread);
+      gl.uniform1f(u.uDitherPattern, settings.ditherPattern);
+      const modelWin = model.tex && model.spot ? drawn.indexOf(model.spot.closest('.win')) : -1;
+      const mr = model.spot?.getBoundingClientRect();
+      gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top, mr.right - box.left, mr.bottom - box.top] : [0, 0, 0, 0]));
+      gl.uniform1f(u.uModelWin, modelWin);
+      gl.uniform1f(u.uModelPacked, model.panel ? 1 : 0);
+      gl.uniform3f(u.uModelPanel, ...(model.panel ?? [1, 0, 0]));
+      const insets = new Float32Array(32), insetWins = new Float32Array(8);
+      let insetCount = 0;
+      drawn.forEach((win, i) => {
+        for (const sect of win.querySelectorAll('.sect')) {
+          if (insetCount >= 8) break;
+          const q = sect.getBoundingClientRect();
+          if (!q.width) continue;
+          insets.set([q.left - box.left, q.top - box.top, q.right - box.left, q.bottom - box.top], insetCount * 4);
+          insetWins[insetCount++] = i;
+        }
+      });
+      gl.uniform4fv(u.uInset, insets);
+      gl.uniform1fv(u.uInsetWin, insetWins);
+      gl.uniform1i(u.uInsetCount, insetCount);
+      gl.uniform1f(u.uInsetBlur, settings.insetBlur);
+      gl.uniform1f(u.uInsetMix, settings.insetMix);
+      gl.uniform1f(u.uInsetInkMix, settings.insetInkMix);
+      gl.uniform1f(u.uInsetTone, settings.insetTone);
+      gl.uniform1f(u.uInsetInkTone, settings.insetInkTone);
+      gl.uniform3f(u.uModelLevels, ...settings.modelLevels);
+      gl.uniform3f(u.uImageLevels, ...settings.imageLevels);
+      gl.uniform2f(u.uImageRange, ...settings.imageRange);
+      gl.uniform1f(u.uShadowGray, settings.shadowGray);
+      gl.uniform1f(u.uShadowStrength, settings.shadowStrength);
+      gl.uniform1i(u.uCount, drawn.length);
+      gl.uniform1f(u.uFeather, settings.feather);
+      gl.uniform1f(u.uBlur, settings.blur);
+      gl.uniform1f(u.uHaloSize, settings.haloSize);
+      gl.uniform1f(u.uHaloGlow, settings.haloGlow);
+      gl.uniform1f(u.uStackGlow, settings.stackGlow);
+      gl.uniform1f(u.uOverlay, settings.overlay);
+      gl.uniform1f(u.uBg, settings.bg);
+      gl.uniform1f(u.uInk, settings.ink);
+      gl.uniform3f(u.uInkColor, ...(settings.inkColor.length === 3 ? settings.inkColor : [1, 1, 1]));
+      gl.uniform1f(u.uInkOverride, settings.inkOverride);
+      gl.uniform1f(u.uMapOn, stage.dataset.map === 'off' ? 0 : 1);
+      gl.uniform2f(u.uLiquidSize, liquid ? liquid.cols * CELL : 1, liquid ? liquid.rows * CELL : 1);
+      gl.uniform1f(u.uRefract, settings.refract);
+      gl.uniform1f(u.uLight, settings.light);
+      gl.uniform1f(u.uLife, seed ? 2 : life ? 1 : 0);
+      gl.uniform1f(u.uLifeAlpha, life?.fade ? lifeAlpha(performance.now()) : 0);
+      gl.uniform4fv(u.uLifeFade, life?.fade?.pattern ?? [0, 0, 0, 0]);
+      gl.uniform2f(u.uLifeGrid, life?.cols ?? 1, life?.rows ?? 1);
+      gl.uniform2f(u.uCanvas, w, h);
+    };
+    const scissor = (area) => {
+      if (!area) return gl.disable(gl.SCISSOR_TEST);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(...area);
+    };
+    if (seed || !main.cache || !(animating || life) || (!compositeOnly && !clip)) {
+      if (!seed) stale = true;
+      scissor(seed || compositeFull || compositeOnly ? null : clip);
+      send(main);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    } else {
+      const fresh = ensureCache(w, h) || stale;
+      stale = false;
+      if (fresh || !compositeOnly) {
+        for (const unit of CACHE_UNITS) {
+          gl.activeTexture(gl.TEXTURE0 + unit);
+          gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+        scissor(fresh ? null : clip);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, cache.fb);
+        send(main.cache);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
+      [cache.a, cache.b].forEach((tex, i) => {
+        gl.activeTexture(gl.TEXTURE0 + CACHE_UNITS[i]);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+      });
+      scissor(compositeOnly || compositeFull ? null : clip);
+      send(composite);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
     gl.disable(gl.SCISSOR_TEST);
     if (seed) gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
@@ -1106,20 +1395,33 @@ void main() {
       const panel = (video.videoHeight - 2 * LOOP_GAP) / 3;
       model.panel = [panel / video.videoHeight, (panel + LOOP_GAP) / video.videoHeight, 0.5 / panel];
     }
-    const key = e.detail.layer === 'shadow' ? 'shadow' : 'tex';
-    if (!model[key]) model[key] = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, model[key]);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const source = video ?? e.detail.canvas;
+    const [sw, sh] = video ? [video.videoWidth, video.videoHeight] : [source.width, source.height];
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video ?? e.detail.canvas);
-    if (key === 'tex') requestRender(first ? null : modelBox());
+    if (!model.tex) {
+      model.tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, model.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, model.tex);
+    if (!video && model.size === `${sw}x${sh}`) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    model.size = `${sw}x${sh}`;
+    requestRender(first ? null : modelBox());
   });
+  let layout = '';
   addEventListener('tune:apply', () => {
     if (!gl) return;
     readSettings();
+    const css = getComputedStyle(root);
+    const next = ['--sect-pad-x', '--sect-pad-y', '--cols-split', '--cols-gap', '--image-fade-x', '--image-fade-y'].map((name) => css.getPropertyValue(name)).join();
+    if (next !== layout) {
+      layout = next;
+      [...rasters.keys()].forEach(forget);
+    }
     render();
   });
 

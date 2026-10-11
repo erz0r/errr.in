@@ -15,7 +15,7 @@
     const box = el('div', 'panel-text');
     if (!txt) return box;
     box.append(...[...txt.cloneNode(true).childNodes]);
-    box.querySelectorAll('.model, .message-box, .back, .lastfm[hidden]').forEach((n) => n.remove());
+    box.querySelectorAll('.model, .message-box, .back, .lastfm[hidden], .sect:has(> .log), .log, hr').forEach((n) => n.remove());
     return box;
   };
 

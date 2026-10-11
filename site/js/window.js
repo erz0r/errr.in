@@ -283,6 +283,7 @@
 
   function anchorHome(win, box) {
     const [w, h] = [win.offsetWidth, win.offsetHeight];
+    if (win.hasAttribute('data-flat')) return { x: Math.max(0, (box.width - w) / 2), y: 0, w, h };
     return { x: onPage((box.width - w) / 2, w, box.width), y: onPage((box.height - h) / 2, h, box.height), w, h };
   }
 

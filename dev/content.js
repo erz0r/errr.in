@@ -57,16 +57,17 @@ const MESSAGE_BOX = '<form class="message-box" novalidate><div class="message-ro
   + '<button type="submit" aria-label="send"><svg viewBox="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5"/></svg></button>'
   + '</div><input class="trap" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">'
   + '<p class="message-status" role="status"></p></form>';
+const withLog = (html) => html.replace(/<p>\{log\}<\/p>|\{log\}/g, '<div class="log" data-src="/api/log"></div>');
 const withMessageBox = (html) => html.replace(/<p>\{message-box\}<\/p>|\{message-box\}/g, MESSAGE_BOX);
 
 const fileVersion = (path) => createHash('sha256').update(readFileSync(join(SITE, path))).digest('hex').slice(0, 8);
 
-// baked loops are named <model>-loop-<light>-<fill>.mp4 (see dev/bake-model.js)
+// baked loops are named <model>-loop-<light>_<fill>_<shadow angle>_<shadow height>_<turn>.mp4 (see dev/bake-model.js)
 function modelLoops(name) {
   const loops = {};
   for (const file of readdirSync(join(SITE, 'media'))) {
-    const m = file.match(new RegExp(`^${name}-loop-([\\d.]+)-([\\d.]+)\\.mp4$`));
-    if (m) loops[`${Number(m[1])},${Number(m[2])}`] = `/media/${file}?v=${fileVersion(`/media/${file}`)}`;
+    const m = file.match(new RegExp(`^${name}-loop-((?:-?[\\d.]+_){4}-?[\\d.]+)\\.mp4$`));
+    if (m) loops[m[1].split('_').map(Number).join()] = `/media/${file}?v=${fileVersion(`/media/${file}`)}`;
   }
   return loops;
 }
@@ -109,7 +110,7 @@ async function load(dir) {
     const headings = await readFile(join(CONTENT, dir, `${name}.headings.txt`), 'utf8')
       .then((text) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean), () => []);
     const page = parse(await readFile(join(CONTENT, dir, f), 'utf8'));
-    return { name, headings, ...page, html: withModel(withMessageBox(newTabs(await withRandom(await withLastfm(await withIcons(page.html)))))) };
+    return { name, headings, ...page, html: withLog(withModel(withMessageBox(newTabs(await withRandom(await withLastfm(await withIcons(page.html))))))) };
   }));
 }
 
@@ -126,6 +127,7 @@ function windowHtml({ name, settings, title, html, headings }) {
     + (settings.place ? ` data-place="${escape(settings.place)}"` : '')
     + (settings.width === 'fit' ? ' data-fit' : '')
     + (settings.popup ? ' data-popup' : '')
+    + (settings.flat ? ' data-flat' : '')
     + (headings.length ? ` data-headings="${escape(JSON.stringify(headings))}"` : '')
     + ` aria-label="${escape(title)}" tabindex="-1"`
     + (style ? ` style="${style}"` : '')
@@ -166,7 +168,7 @@ async function home({ missing = false } = {}) {
   if (missing) {
     const page = parse(await readFile(join(CONTENT, '404.md'), 'utf8').catch(() => '# not found'));
     windows = windows.map((w) => ({ ...w, settings: { ...w.settings, open: false } }));
-    windows.push({ ...page, name: '404', headings: [], html: withModel(withMessageBox(newTabs(await withRandom(await withLastfm(await withIcons(page.html)))))), settings: { ...page.settings, open: true } });
+    windows.push({ ...page, name: '404', headings: [], html: withLog(withModel(withMessageBox(newTabs(await withRandom(await withLastfm(await withIcons(page.html))))))), settings: { ...page.settings, open: true } });
     template = template.replace('<title>errr.in</title>', `<title>${escape(page.title || 'not found')} · errr.in</title>`);
   }
   windows.sort((a, b) => Number(!!a.settings.open) - Number(!!b.settings.open));
