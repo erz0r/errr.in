@@ -54,6 +54,8 @@ width: fit
 - `popup: true`: the window opens as a small bubble on top of the window it was opened from,
   just above the link, with a tail pointing at it. everything around it fades to the page
   color. clicking outside or escape closes it.
+- `flat: true`: the window runs the full height of the screen with no glow, and only its
+  sides dissolve into the page. the about window uses it.
 
 other things you can write:
 
@@ -65,7 +67,13 @@ other things you can write:
 - footnotes: `a claim[^smith]`, and anywhere below, `[^smith]: the source.` in a window,
   the note shows in a popup in the top left. writeups also list them at the end.
 - images: put the file in `site/media/` and write `![alt](/media/file.jpg)`. images are
-  recolored through the gradient map.
+  recolored through the gradient map, with their own levels and their own stretch of the map
+  (the images section of the panel), so a photo with odd colors can still be made readable.
+- boxes: wrap part of a window in `<div class="sect">` (with blank lines inside) to put it on
+  a soft box in its own color from the gradient map. `<div class="cols">` around two boxes puts
+  them side by side, stacked on phones. the about window has the intro box, then a
+  "currently" list next to the log.
+- `***` is a dotted line that thins out toward its ends.
 - logos: `{icon:github}` inserts `site/media/icons/github.svg` in the text color. the
   current ones come from simple icons (cc0). any one-color svg works.
 - copy links: `[rukoaraba](copy:rukoaraba)` copies the text when clicked.
@@ -82,15 +90,23 @@ other things you can write:
   her upper body sways a little in the loop, and at random moments she blinks (the Blink
   shape key, sometimes twice) and flicks an ear or both. her scene lives in
   `site/js/model-scene.js`, shared by the live model and the baked loop below.
+  each preset sets where she sits, her size, which way she faces, and the sun for her shadow
+  (direction, height, darkness). her box has invisible room on every side so a long shadow
+  isn't cut off. she draws at 30 fps and at most 1.5x the screen's pixel density, with her
+  shadow and body side by side in one canvas so each frame is one copy into the page.
 - phones (anything without hover) don't run three.js. there's no cursor for her to follow, so
   they play a loop baked from the same scene: `npm run bake` (needs ffmpeg and
   `npx playwright install chromium`) renders 12 seconds of her (three sways, with blinks and ear
-  flicks at fixed times) into `site/media/erinsona-loop-<light>-<fill>.mp4`, one per model
-  light/fill used by `settings.json` or a preset. each frame stacks what the renderer reads from
-  the live model: her gray, her alpha and her shadow's alpha, so levels and the gradient map still
-  apply on the phone. the video plays invisibly in her box and the renderer draws each new frame.
-  run it again after changing the model or a preset's model light or fill; until then, phones
-  showing that preset get the live model. `?tune` always gets the live model.
+  flicks at fixed times) into `site/media/erinsona-loop-<light>_<fill>_<sun direction>_<sun height>_<turn>.mp4`,
+  one per combination used by `settings.json` or a preset. each frame stacks what the renderer
+  reads from the live model: her gray, her alpha and her shadow's alpha, so levels and the gradient
+  map still apply on the phone. the video plays invisibly in her box and the renderer draws each
+  new frame. run it again after changing the model or any of those five settings in a preset;
+  until then, phones showing that preset get the live model. `?tune` always gets the live model.
+- log: `{log}` shows erin's latest posts (text, time and pictures) from one discord channel,
+  newest first. a bot watches the channel (see deploying), and new posts, edits and deletes show
+  up on the page within a second. the dev server shows the live log, or the entries in
+  `dev/log-sample.json` when it can't reach it.
 - message box: `{message-box}` is a text box with a send arrow. enter sends. the intro's
   "you can tell me something" opens `content/windows/tell.md`, a popup with just this box.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last
@@ -125,6 +141,15 @@ in a 256-color ramp made from the palette.
   page through the same noise and sweep as a window's fade, over twice the window fade time.
 - clicking drops a ripple that spreads across the page. it is turned off for reduced
   motion.
+- while ripples or the game of life run, the windows, glows, boxes and text are drawn once
+  into two cache textures, and each ripple or game frame only bends, tones and dithers that
+  cache. the gray is kept as `a * life + b` so the game's tone can still go under everything.
+  anything else (fades, resizes) draws the whole page directly. this needs the
+  `WEBGL_draw_buffers` extension; without it everything draws directly.
+- boxes are blurred rectangles worked out per pixel like the halos. their color comes from a
+  spot on the gradient map and is dithered against the window, and it fades out under text so
+  letters keep clean edges. pictures in the log fade into their box, more at the sides than at
+  the top and bottom.
 - without webgl or javascript, css draws plain windows in the palette's colors.
 
 an svg filter version came first. it ran at 3 to 22 fps on an iphone, and the webgl
@@ -180,6 +205,12 @@ plain black text.
 open any page with `?tune` on the dev server. it never ships in `dist/`. the ` key hides
 it.
 
+- settings are grouped (colors, glow & edges, dither, windows, about page boxes, images,
+  erinsona, ripples, testing). a search box at the top finds a setting by its name, what it
+  does or its group. each setting has a one-line explanation, which a checkbox hides. which
+  groups are open is remembered.
+- on the page, drag erinsona to move her, scroll over her to resize her and shift+scroll to
+  turn her.
 - sliders for the effects, fades, layout, ripple and text contrast, plus a randomize
   button.
 - presets at the top. load one to set every slider from it, and save writes back to the
@@ -216,6 +247,14 @@ exposed directly and cloudflare handles https.
   `~/errr.in-inbox/messages.jsonl` and posts it to a discord webhook. the webhook lives in
   `~/docker/errrin/inbox.env` on momoka, never in the repo. nginx allows about 3 messages a
   minute per visitor. `npm run messages` shows them all.
+- log: a third container, `errrin-log` (`deploy/log.mjs`, no dependencies), is a discord bot.
+  it keeps a gateway connection open and, whenever a message in the log channel is posted,
+  edited or deleted, reads the channel again and keeps erin's 15 newest posts. pictures are
+  saved to `~/errr.in-log/media`. it serves `/api/log`, the pictures, and `/api/log/stream`,
+  which pushes the log to open pages (server-sent events, at most 4 per visitor). it also
+  rereads the channel every minute in case the connection drops. the bot token, channel id and
+  erin's user id live in `~/docker/errrin/log.env` on momoka, never in the repo. the bot needs
+  the message content intent and read access to that channel.
 - cloudflare web analytics is allowed by the security policy, for visitor stats.
 - www.errr.in redirects to errr.in. the main site is nginx's default server, so any other
   host name gets the site rather than the redirect.
@@ -255,3 +294,13 @@ then the baked loop phones get):
 | screens' worth of pixels shaded per second | 61 | 9 | 7 |
 | gpu process busy, ms per second | 24.5 | 25.6 | 13 |
 | page main thread busy, ms per second | 51 | about the same | 26 |
+
+on a desktop at 1920×1080 and 2x (a 4k-sized canvas), before and after the ripple cache, her
+30 fps cap and her one-copy frames:
+
+| | before | after |
+|---|---|---|
+| ripples running, gpu ms per second | about 260 | 70 to 100 |
+| about window open, gpu ms per second | about 105 | 30 to 45 |
+| about window open, main thread busy | 10% | 4% |
+| ripples running, main thread busy | 12% | 4% |
