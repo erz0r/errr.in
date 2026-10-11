@@ -16,3 +16,14 @@
       - ~/docker/errrin/inbox.mjs:/app/inbox.mjs:ro
       - ~/errr.in-inbox:/data
     restart: unless-stopped
+  errrin-log:
+    image: node:22-alpine
+    container_name: errrin-log
+    user: "1000:1000"
+    command: ["node", "/app/log.mjs"]
+    read_only: true
+    env_file: errrin/log.env
+    volumes:
+      - ~/docker/errrin/log.mjs:/app/log.mjs:ro
+      - ~/errr.in-log:/data
+    restart: unless-stopped

@@ -96,6 +96,28 @@ createServer(async (req, res) => {
     const page = await renderRoute(url.pathname);
     const render = async (html) => renderPage(html, await loadSettings(), { tune, presets: await loadPresets() });
     if (page) return send(200, await render(page), TYPES['.html']);
+    if (url.pathname === '/api/log/stream') {
+      const stop = new AbortController();
+      req.on('close', () => stop.abort());
+      const live = await fetch('https://errr.in/api/log/stream', { signal: stop.signal }).catch(() => null);
+      if (!live?.ok || !live.headers.get('content-type')?.startsWith('text/event-stream')) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' });
+        return res.end(`retry: 60000
+data: ${JSON.stringify(JSON.parse(await readFile(resolve('dev/log-sample.json'), 'utf8')))}\n\n`);
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' });
+      try {
+        for await (const chunk of live.body) res.write(chunk);
+      } catch {}
+      return res.end();
+    }
+    if (url.pathname === '/api/log' || url.pathname.startsWith('/api/log/media/')) {
+      const live = await fetch(`https://errr.in${url.pathname}`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+      const type = live?.ok ? live.headers.get('content-type') ?? '' : '';
+      if (/^(application\/json|image\/)/.test(type)) return send(200, Buffer.from(await live.arrayBuffer()), type);
+      if (url.pathname === '/api/log') return send(200, await readFile(resolve('dev/log-sample.json')), TYPES['.json']);
+      return send(404, 'not found');
+    }
     if (url.pathname === '/robots.txt') return send(200, robotsTxt(), 'text/plain; charset=utf-8');
     if (url.pathname === '/sitemap.xml') return send(200, await sitemapXml(), 'application/xml; charset=utf-8');
     if (url.pathname === '/llms.txt') return send(200, await llmsTxt(), 'text/plain; charset=utf-8');
