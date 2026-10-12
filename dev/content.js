@@ -53,7 +53,7 @@ async function withLastfm(html) {
 }
 
 const MESSAGE_BOX = '<form class="message-box" novalidate><div class="message-row">'
-  + '<textarea name="message" rows="1" maxlength="2000" placeholder="anything.." aria-label="your message" autofocus></textarea>'
+  + '<textarea name="message" rows="1" maxlength="2000" placeholder="type something here.." aria-label="your message"></textarea>'
   + '<button type="submit" aria-label="send"><svg viewBox="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5"/></svg></button>'
   + '</div><input class="trap" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">'
   + '<p class="message-status" role="status"></p></form>';

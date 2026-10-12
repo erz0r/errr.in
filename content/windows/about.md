@@ -23,6 +23,14 @@ i like drawing, graphic design, intuitive user interfaces[^int] {random:kaomoji-
 
 ***
 
+<div class="sect">
+
+<p class="label">send me a message</p>
+
+{message-box}
+
+</div>
+
 <div class="cols">
 <div class="sect">
 

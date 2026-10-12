@@ -114,8 +114,8 @@ other things you can write:
   newest first. a bot watches the channel (see deploying), and new posts, edits and deletes show
   up on the page within a second. the dev server shows the live log, or the entries in
   `dev/log-sample.json` when it can't reach it.
-- message box: `{message-box}` is a text box with a send arrow. enter sends. the intro's
-  "you can tell me something" opens `content/windows/tell.md`, a popup with just this box.
+- message box: `{message-box}` is a text box with a send arrow. enter sends. it sits in its own
+  box at the bottom of the about page.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last
   played and when. it updates every minute while the page is open. it needs a last.fm api
   key in a file called `lastfm.key` (git ignores it). without the key, nothing shows.
