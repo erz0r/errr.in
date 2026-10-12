@@ -14,7 +14,7 @@ function plain(body) {
     .replace(/^<\/?div[^>]*>$/gm, '')
     .replace(/^\*{3,}$/gm, '')
     .replace(/\{random:([\w-]+)\}/g, '(a random $1)')
-    .replace(/\[([^\]]+)\]\(copy:([^)]+)\)/g, '$1 (click to copy: $2)')
+    .replace(/\[([^\]]+)\]\(copy:([^)]+)\)/g, (_, label, value) => (label.trim() === value ? value : `${label} (click to copy: ${value})`))
     .replace(/\]\(#([\w-]+)\)/g, `](${ORIGIN}/#$1)`)
     .replace(/\]\((\/[^)]*)\)/g, `](${ORIGIN}$1)`)
     .replace(/^#+[ \t]*$/gm, '')
