@@ -75,7 +75,7 @@ const HELP = {
   sectPadX: 'room between a box\'s sides and its text',
   sectPadY: 'room above and below the text in a box',
   colsSplit: 'how much of the width the left box gets',
-  colsGap: 'space between the two lower boxes',
+  colsGap: 'space between every box on the about page, and around the dotted line',
   modelX: 'move her left or right',
   modelY: 'move her up or down',
   modelSize: 'how big she is',

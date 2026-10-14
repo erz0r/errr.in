@@ -180,7 +180,7 @@ const RANGES = {
   sectPadX: [0, 80, 18],
   sectPadY: [0, 80, 14],
   colsSplit: [0.15, 0.85, 0.33],
-  colsGap: [0, 120, 24],
+  colsGap: [0, 120, 53],
   minContrast: [1, 12, 4.5],
   windowPush: [0, 2, 1],
 };
