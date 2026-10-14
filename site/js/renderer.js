@@ -1419,7 +1419,7 @@ void main() {
     if (!gl) return;
     readSettings();
     const css = getComputedStyle(root);
-    const next = ['--sect-pad-x', '--sect-pad-y', '--cols-split', '--cols-gap', '--image-fade-x', '--image-fade-y'].map((name) => css.getPropertyValue(name)).join();
+    const next = ['--sect-pad-x', '--sect-pad-y', '--cols-split', '--cols-gap', '--cols-lower-gap', '--image-fade-x', '--image-fade-y'].map((name) => css.getPropertyValue(name)).join();
     if (next !== layout) {
       layout = next;
       [...rasters.keys()].forEach(forget);

@@ -178,16 +178,16 @@ html:not(.gl) .win[data-shape="column"] { border-radius: 0; }
 .txt .footnotes { display: none; }
 
 .win[data-flat] { height: 100%; max-height: none; }
-.win[data-flat] .txt { --gap: calc(var(--cols-gap, 53) * var(--u)); }
+.win[data-flat] .txt { --gap: calc(var(--cols-gap, 53) * var(--u)); --lower-gap: calc(var(--cols-lower-gap, 32) * var(--u)); }
 .txt hr { height: calc(8 * var(--u)); margin: 1.6em 0; border: 0; }
 .win[data-flat] .txt hr { margin: calc((var(--gap) - 8 * var(--u)) / 2) 0; }
-.win[data-flat] .txt > :is(.sect, .cols) + :is(.sect, .cols) { margin-top: var(--gap); }
+.win[data-flat] .txt > :is(.sect, .cols) + :is(.sect, .cols) { margin-top: var(--lower-gap); }
 html:not(.gl) .txt hr { border-top: 2px dotted var(--map-ink); }
 .sect { position: relative; padding: calc(var(--sect-pad-y, 14) * var(--u)) calc(var(--sect-pad-x, 18) * var(--u)); }
 .sect > :first-child { margin-top: 0; }
 .sect:has(> .model) { overflow: hidden; overflow: clip; }
 html:not(.gl) .model { display: none; }
-.cols { display: grid; grid-template-columns: minmax(0, calc(var(--cols-split, 0.33) * (100% - var(--gap)))) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+.cols { display: grid; grid-template-columns: minmax(0, calc(var(--cols-split, 0.33) * (100% - var(--lower-gap)))) minmax(0, 1fr); gap: var(--lower-gap); align-items: start; }
 @media (max-width: 640px) { .cols { grid-template-columns: minmax(0, 1fr); } }
 .label { font-size: calc(12 * var(--u)); letter-spacing: 0.04em; opacity: 0.75; }
 .txt .label + ul { margin-top: 0.4em; }

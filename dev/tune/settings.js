@@ -126,6 +126,7 @@ export function cssVars(s) {
   --sect-pad-y: ${s.sectPadY};
   --cols-split: ${s.colsSplit};
   --cols-gap: ${s.colsGap};
+  --cols-lower-gap: ${s.colsLowerGap};
   --window-layout: ${s.windowLayout};
   --bg-gray: ${+bg.toFixed(4)};
 ${palette}
@@ -181,6 +182,7 @@ const RANGES = {
   sectPadY: [0, 80, 14],
   colsSplit: [0.15, 0.85, 0.33],
   colsGap: [0, 120, 53],
+  colsLowerGap: [0, 120, 32],
   minContrast: [1, 12, 4.5],
   windowPush: [0, 2, 1],
 };
