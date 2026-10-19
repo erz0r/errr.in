@@ -13,7 +13,7 @@ my friends call me erin[^erin][^alias]!
 
 i like drawing, graphic design, intuitive user interfaces[^int] {random:kaomoji-happy}
 
-[{icon:x} twitter](https://x.com/inchoaterin) · [{icon:lastdotfm} last.fm](https://www.last.fm/user/erarnard) · [{icon:huggingface} huggingface](https://huggingface.co/errrinn) · [{icon:github} github](https://github.com/erz0r) · [{icon:email} hi@errr.in](copy:hi@errr.in)
+[{icon:x} twitter](https://x.com/erinbeess) · [{icon:lastdotfm} last.fm](https://www.last.fm/user/erarnard) · [{icon:huggingface} huggingface](https://huggingface.co/errrinn) · [{icon:github} github](https://github.com/erz0r) · [{icon:email} hi@errr.in](copy:hi@errr.in)
 
 {lastfm:erarnard}
 
