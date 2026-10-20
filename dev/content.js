@@ -138,10 +138,19 @@ function windowHtml({ name, settings, title, html, headings }) {
 export async function sources() {
   const read = async (dir) => {
     const files = (await readdir(join(CONTENT, dir)).catch(() => [])).filter((f) => f.endsWith('.md')).sort();
-    return Promise.all(files.map(async (f) => ({ name: basename(f, '.md'), ...parse(await readFile(join(CONTENT, dir, f), 'utf8')) })));
+    return Promise.all(files.map(async (f) => {
+      const name = basename(f, '.md');
+      const headings = await readLines(join(dir, `${name}.headings.txt`));
+      return { name, headings, ...parse(await readFile(join(CONTENT, dir, f), 'utf8')) };
+    }));
   };
-  return { windows: await read('windows'), writeups: await read('writeups'), description: await siteDescription() };
+  const missing = parse(await readFile(join(CONTENT, '404.md'), 'utf8').catch(() => '# not found'));
+  return { windows: await read('windows'), writeups: await read('writeups'), missing, description: await siteDescription() };
 }
+
+// the lines of content/<path>, as {random:...} and random headings use them
+export const readLines = (path) => readFile(join(CONTENT, path), 'utf8')
+  .then((text) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean), () => []);
 
 export async function routes() {
   return ['/', ...(await load('writeups')).map((w) => `/writeups/${w.name}/`)];

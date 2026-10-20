@@ -39,7 +39,10 @@ everything you edit is in `content/`.
   previews.
 - `content/404.md` is the window shown for an address that doesn't exist.
 - `/llms.txt` is made from content/ on every build: the description, a map of every page
-  and window, then the full text of each. every page links to it in its head and with a
+  and window (and the 404 page), then the full text of each as the site shows it: footnotes
+  nothing points to are left out like they are on the page, the live parts (last.fm, the model,
+  the message box, the log) are described in words, and the lists random picks come from (the
+  intro's headings, the kaomoji) are at the end. every page links to it in its head and with a
   link nobody sees (no size, not focusable, hidden from screen readers).
 
 settings go at the top of a file, between `---` lines:
