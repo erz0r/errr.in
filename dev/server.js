@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { extname, resolve, sep } from 'node:path';
@@ -30,6 +31,8 @@ const TYPES = {
   '.glb': 'model/gltf-binary',
   '.mp4': 'video/mp4',
 };
+
+const inbox = new Map();
 
 const loadSettings = async () => validate(JSON.parse(await readFile(SETTINGS, 'utf8')));
 const isLoopback = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
@@ -84,11 +87,28 @@ createServer(async (req, res) => {
       console.log(`\n[perf] from ${req.socket.remoteAddress}\n${JSON.stringify(await readJson(req, url), null, 2)}`);
       return send(204);
     }
-    if (url.pathname === '/api/message' && req.method === 'POST') {
-      const { message, website } = await readJson(req, url);
+    // a stand-in for deploy/inbox.mjs: conversations live in memory, erin answers each message a
+    // few seconds later, and there are no push notifications
+    if (url.pathname === '/api/message/push') return send(404);
+    if (url.pathname === '/api/message') {
+      const key = req.headers.cookie?.match(/(?:^|;\s*)inbox=([\w-]+)/)?.[1];
+      const view = (k) => JSON.stringify({ conversations: [...(inbox.get(k) ?? [])].reverse(), push: null });
+      if (req.method === 'GET') return send(200, view(key), TYPES['.json']);
+      if (req.method !== 'POST') return send(405);
+      const { message, website, convo } = await readJson(req, url);
       if (typeof message !== 'string' || !message.trim() || message.length > 2000) return send(400);
-      if (!website) console.log(`\n[message, not saved in dev]\n${message.trim()}`);
-      return send(204);
+      if (website) return send(204);
+      console.log(`\n[message, not saved in dev]\n${message.trim()}`);
+      const fresh = key ?? randomUUID();
+      if (!inbox.has(fresh)) inbox.set(fresh, []);
+      const mine = inbox.get(fresh);
+      const into = convo ? mine.find((c) => c.id === convo) : { id: randomUUID(), entries: [] };
+      if (!into) return send(404);
+      if (!convo) mine.push(into);
+      into.entries.push({ from: 'you', time: new Date().toISOString(), text: message.trim() });
+      setTimeout(() => into.entries.push({ from: 'erin', time: new Date().toISOString(), text: 'a pretend reply from the dev server' }), 5000);
+      res.setHeader('Set-Cookie', `inbox=${fresh}; Path=/api/message; HttpOnly; SameSite=Strict`);
+      return send(200, view(fresh), TYPES['.json']);
     }
     if (req.method !== 'GET') return send(405);
 

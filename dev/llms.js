@@ -13,7 +13,7 @@ function plain(body) {
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\{icon:[\w-]+\} ?/g, '')
     .replace(/\{lastfm:([\w-]+)\}/g, '(what erin is listening to on last.fm right now, or what erin last listened to and when)')
-    .replace(/\{message-box\}/g, '(a text box for sending erin a message, which only erin sees)')
+    .replace(/\{message-box\}/g, '(a text box for sending erin a message, which only erin sees. erin can answer, and the answers show up under the box in the browser that sent it, which can keep talking and get a notification when erin replies)')
     .replace(/\{log\}/g, `(erin's 15 newest posts from a discord channel, newest first, with their times and any pictures. they update live; the current ones are at ${ORIGIN}/api/log as json)`)
     .replace(/\{model:[\w-]+\}/g, '(a small animated 3d model of erinsona, erin\'s character, sitting and swaying, blinking and flicking her ears now and then. on computers her head and eyes follow the cursor)')
     .replace(/<p class="label">([^<]*)<\/p>/g, '$1:')

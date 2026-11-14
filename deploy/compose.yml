@@ -11,9 +11,11 @@
     user: "1000:1000"
     command: ["node", "/app/inbox.mjs"]
     read_only: true
-    env_file: errrin/inbox.env
+    # the bot token and erin's discord id come from the log bot's env file
+    env_file: [errrin/inbox.env, errrin/log.env]
     volumes:
       - ~/docker/errrin/inbox.mjs:/app/inbox.mjs:ro
+      - ~/docker/errrin/discord.mjs:/app/discord.mjs:ro
       - ~/errr.in-inbox:/data
     restart: unless-stopped
   errrin-log:
@@ -25,5 +27,6 @@
     env_file: errrin/log.env
     volumes:
       - ~/docker/errrin/log.mjs:/app/log.mjs:ro
+      - ~/docker/errrin/discord.mjs:/app/discord.mjs:ro
       - ~/errr.in-log:/data
     restart: unless-stopped

@@ -17,8 +17,6 @@ i like drawing, graphic design, intuitive user interfaces[^int] {random:kaomoji-
 
 {lastfm:erarnard}
 
-{model:erinsona}
-
 </div>
 
 ***
@@ -39,6 +37,8 @@ i like drawing, graphic design, intuitive user interfaces[^int] {random:kaomoji-
 - messing with my home server
 - watching girls band cry
 - language model play
+
+{model:erinsona}
 
 </div>
 <div class="sect">

@@ -100,7 +100,8 @@ other things you can write:
   her upper body sways a little in the loop, and at random moments she blinks (the Blink
   shape key, sometimes twice) and flicks an ear or both. her scene lives in
   `site/js/model-scene.js`, shared by the live model and the baked loop below.
-  each preset sets where she sits, her size, which way she faces, and the sun for her shadow
+  she lives in the "currently" box, so she stays under that list however tall the boxes above
+  it get (on phones she sits after the list). each preset sets where she sits, her size, which way she faces, and the sun for her shadow
   (direction, height, darkness). her box has invisible room on every side so a long shadow
   isn't cut off. she draws at 30 fps and at most 1.5x the screen's pixel density, with her
   shadow and body side by side in one canvas so each frame is one copy into the page.
@@ -118,7 +119,15 @@ other things you can write:
   up on the page within a second. the dev server shows the live log, or the entries in
   `dev/log-sample.json` when it can't reach it.
 - message box: `{message-box}` is a text box with a send arrow. enter sends. it sits in its own
-  box at the bottom of the about page.
+  box on the about page. once a browser has sent something, "see your messages and replies"
+  shows up under the box. it opens that browser's conversations, newest first: each message
+  it started, erin's answers, and a "say more.." box to keep talking. it opens by itself when
+  there's an answer the browser hasn't seen (remembered in localStorage), and checks for new
+  answers every 30 seconds while the box is showing. "ping me when erin replies" turns on
+  browser notifications through a small service worker (`site/notify.js`), where the browser
+  supports push (on iphones, only from a home screen web app). the conversations belong to
+  the browser, through an http-only cookie the page itself can't read, so clearing cookies
+  loses them. the dev server answers every message with a pretend reply after 5 seconds.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last
   played and when. it updates every minute while the page is open. it needs a last.fm api
   key in a file called `lastfm.key` (git ignores it). without the key, nothing shows.
@@ -253,10 +262,27 @@ exposed directly and cloudflare handles https.
   folder out and a mount would keep pointing at the old one.
 - the tunnel config (`~/docker/cloudflared/config.yml`) sends `errr.in` and
   `www.errr.in` to `http://errrin:80`.
-- messages: a second container, `errrin-inbox` (`deploy/inbox.mjs`), saves each message to
-  `~/errr.in-inbox/messages.jsonl` and posts it to a discord webhook. the webhook lives in
-  `~/docker/errrin/inbox.env` on momoka, never in the repo. nginx allows about 3 messages a
-  minute per visitor. `npm run messages` shows them all.
+- messages: a second container, `errrin-inbox` (`deploy/inbox.mjs`, no dependencies), takes
+  messages at `/api/message`. the first message from a browser sets a cookie with a random key
+  (`inbox`, http-only, a year). the inbox only stores a hash of the key, and the first 6
+  characters of that hash are the tag erin sees for that browser. each new message is posted
+  to a discord webhook, and the bot (the log bot's token, through the same gateway code in
+  `deploy/discord.mjs`) starts a thread on it with erin added. erin answers by typing in the
+  thread, and later messages in that conversation go into the same thread as "anon <tag>".
+  if a thread can't be made, a discord reply to any message of the conversation counts as an
+  answer instead. the bot reacts 📨 to every answer it took, and keeps up with edits and
+  deletes. on reconnecting it rereads the channel and the threads active in the last 14 days,
+  for answers sent while it was down. files in `~/errr.in-inbox`: `messages.jsonl` (visitor
+  messages; ones from before conversations existed have no tag), `replies.jsonl` (erin's
+  answers, edits and deletes), `push.json` (notification subscriptions per browser) and
+  `vapid.json` (the key push services check, made on first start; deleting it breaks every
+  subscription). notifications are web push with no payload: the server only says "wake up",
+  and the service worker asks `/api/message` for the newest answer. subscriptions are only
+  taken for the browsers' own push services (google, mozilla, apple, microsoft). the webhook
+  lives in `~/docker/errrin/inbox.env` on momoka, and the inbox also reads `log.env` for the
+  bot token and erin's user id. the bot needs to see the inbox channel, create public threads
+  and add reactions. nginx allows about 6 sends a minute and 30 reads a minute per visitor.
+  `npm run messages` shows every conversation.
 - log: a third container, `errrin-log` (`deploy/log.mjs`, no dependencies), is a discord bot.
   it keeps a gateway connection open and, whenever a message in the log channel is posted,
   edited or deleted, reads the channel again and keeps erin's 15 newest posts. pictures are

@@ -1,9 +1,8 @@
 import { createServer } from 'node:http';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { GUILD_MESSAGES, MESSAGE_CONTENT, connect, discord as ask, log, plain } from './discord.mjs';
 
-const API = process.env.DISCORD_API ?? 'https://discord.com/api/v10';
-const GATEWAY = process.env.DISCORD_GATEWAY ?? 'wss://gateway.discord.gg/?v=10&encoding=json';
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const CHANNEL = process.env.DISCORD_LOG_CHANNEL;
 const AUTHOR = process.env.DISCORD_LOG_AUTHOR;
@@ -15,8 +14,6 @@ const EVERY_MS = 60_000;
 const MAX_IMAGE = 8_000_000;
 const MAX_LISTENERS = 500;
 const PER_VISITOR = 4;
-const FATAL = [4004, 4010, 4011, 4012, 4013, 4014];
-const INTENTS = (1 << 9) | (1 << 15);
 const IMAGE_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const SERVED = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
 
@@ -24,23 +21,7 @@ let feed = JSON.stringify({ updated: null, entries: [] });
 const listeners = new Set();
 const visitors = new Map();
 
-const log = (...parts) => console.error(new Date().toISOString(), ...parts);
-
-const discord = (path) => fetch(`${API}${path}`, {
-  headers: { Authorization: `Bot ${TOKEN}`, 'User-Agent': 'DiscordBot (https://errr.in, 1)' },
-  signal: AbortSignal.timeout(15_000),
-});
-
-function plain(message) {
-  const users = new Map((message.mentions ?? []).map((u) => [u.id, u.global_name ?? u.username]));
-  return (message.content ?? '')
-    .replace(/<@!?(\d+)>/g, (_, id) => `@${users.get(id) ?? 'someone'}`)
-    .replace(/<@&\d+>/g, '@role')
-    .replace(/<#\d+>/g, '#channel')
-    .replace(/<a?:(\w+):\d+>/g, ':$1:')
-    .replace(/<t:(\d+)(?::\w)?>/g, (_, s) => new Date(Number(s) * 1000).toISOString().slice(0, 16).replace('T', ' '))
-    .trim();
-}
+const discord = (path) => ask(TOKEN, path);
 
 async function saveImage(attachment) {
   const ext = IMAGE_TYPES[attachment.content_type?.split(';')[0]];
@@ -118,62 +99,6 @@ function refresh() {
 }
 
 const WATCHED = new Set(['MESSAGE_CREATE', 'MESSAGE_UPDATE', 'MESSAGE_DELETE', 'MESSAGE_DELETE_BULK']);
-let backoff = 5000;
-function connect() {
-  const socket = new WebSocket(GATEWAY);
-  let beat = null, first = null, steady = null, seq = null, acked = true, pause = 0;
-  const send = (data) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(data));
-  const heartbeat = () => {
-    if (!acked) return socket.close(4000, 'no heartbeat ack');
-    acked = false;
-    send({ op: 1, d: seq });
-  };
-  socket.addEventListener('message', ({ data }) => {
-    let packet;
-    try {
-      packet = JSON.parse(data);
-    } catch {
-      return;
-    }
-    const { op, d, s, t } = packet;
-    if (s !== null && s !== undefined) seq = s;
-    if (op === 10) {
-      clearInterval(beat);
-      clearTimeout(first);
-      first = setTimeout(() => {
-        heartbeat();
-        beat = setInterval(heartbeat, d.heartbeat_interval);
-      }, d.heartbeat_interval * Math.random());
-      send({ op: 2, d: { token: TOKEN, intents: INTENTS, properties: { os: 'linux', browser: 'errr.in', device: 'errr.in' } } });
-    } else if (op === 11) {
-      acked = true;
-    } else if (op === 1) {
-      send({ op: 1, d: seq });
-    } else if (op === 7) {
-      socket.close(4000, 'reconnect');
-    } else if (op === 9) {
-      pause = 1000 + 4000 * Math.random();
-      socket.close(4000, 'invalid session');
-    } else if (op === 0 && t === 'READY') {
-      steady = setTimeout(() => { backoff = 5000; }, 60_000);
-      log('connected to the gateway');
-      refresh();
-    } else if (op === 0 && WATCHED.has(t) && d?.channel_id === CHANNEL) {
-      refresh();
-    }
-  });
-  socket.addEventListener('close', ({ code }) => {
-    clearInterval(beat);
-    clearTimeout(first);
-    clearTimeout(steady);
-    if (FATAL.includes(code)) return log(`gateway refused the bot (${code}); check the token and the message content intent`);
-    const delay = Math.max(backoff, pause);
-    log(`gateway closed (${code}), reconnecting in ${Math.round(delay / 1000)}s`);
-    setTimeout(connect, delay);
-    backoff = Math.min(backoff * 2, 300_000);
-  });
-  socket.addEventListener('error', () => {});
-}
 
 await mkdir(MEDIA, { recursive: true });
 try {
@@ -185,7 +110,12 @@ try {
 } catch {}
 if (TOKEN && CHANNEL && AUTHOR) {
   refresh();
-  connect();
+  connect({
+    token: TOKEN,
+    intents: GUILD_MESSAGES | MESSAGE_CONTENT,
+    onReady: refresh,
+    onEvent: (type, d) => { if (WATCHED.has(type) && d?.channel_id === CHANNEL) refresh(); },
+  });
 } else {
   log('DISCORD_BOT_TOKEN, DISCORD_LOG_CHANNEL and DISCORD_LOG_AUTHOR are needed; serving the saved log only');
 }

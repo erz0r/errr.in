@@ -52,11 +52,15 @@ async function withLastfm(html) {
     .replace(/\{lastfm:([\w-]+)\}/g, (_, user) => (key ? `<span ${attrs(user)}></span>` : ''));
 }
 
-const MESSAGE_BOX = '<form class="message-box" novalidate><div class="message-row">'
+const MESSAGE_BOX = '<div class="message"><form class="message-box message-new" novalidate><div class="message-row">'
   + '<textarea name="message" rows="1" maxlength="2000" placeholder="type something here.." aria-label="your message"></textarea>'
   + '<button type="submit" aria-label="send"><svg viewBox="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5"/></svg></button>'
   + '</div><input class="trap" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">'
-  + '<p class="message-status" role="status"></p></form>';
+  + '<p class="message-status" role="status"></p></form>'
+  + '<div class="message-inbox" hidden><p class="message-links">'
+  + '<button type="button" class="message-toggle" aria-expanded="false">see your messages and replies</button>'
+  + '<button type="button" class="message-notify" hidden></button></p>'
+  + '<div class="message-convos" hidden></div></div></div>';
 const withLog = (html) => html.replace(/<p>\{log\}<\/p>|\{log\}/g, '<div class="log" data-src="/api/log"></div>');
 const withMessageBox = (html) => html.replace(/<p>\{message-box\}<\/p>|\{message-box\}/g, MESSAGE_BOX);
 
