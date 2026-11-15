@@ -83,10 +83,15 @@ void main() {
   gl_FragColor = vec4(alive, 0.0, 0.0, 1.0);
 }`;
 
-  const MAIN = (max, mode = 0) => `${mode === 1 ? '#extension GL_EXT_draw_buffers : require\n' : ''}
+  // `spec` bakes in what stays the same for a whole visit: the dither pattern, whether dithering and the gradient
+  // map are on, and whether any window is a speech bubble. the compiler then drops the branches the page never
+  // takes (most of all the bubble's shape code), which frees registers for everything else. it only changes with
+  // the settings or when a bubble opens, so it's rebuilt as rarely as the window capacity is.
+  const MAIN = (max, mode = 0, spec = null) => `${mode === 1 ? '#extension GL_EXT_draw_buffers : require\n' : ''}
 precision highp float;
 #define MAX ${max}
 #define MODE ${mode}
+${spec ? specDefines(spec) : GENERIC_DEFINES}
 uniform vec2 uSize;
 uniform float uScale, uPixel;
 uniform vec4 uRect[MAX];
@@ -171,6 +176,9 @@ float bayer2(vec2 a) {
 float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
 float bayer8(vec2 a) { return bayer4(0.5 * a) * 0.25 + bayer2(a); }
 float threshold(vec2 cell) {
+#ifdef PATTERN
+  return PATTERN;
+#endif
   if (uDitherPattern < 0.5) return bayer2(cell);
   if (uDitherPattern < 1.5) return bayer4(cell);
   if (uDitherPattern < 2.5) return bayer8(cell);
@@ -295,7 +303,7 @@ void main() {
     if (i < uCount && p.x > r.x - reach && p.x < r.z + reach && p.y > r.y - reach && p.y < r.w + reach) {
       if (isFlat(uFade[i])) {
         halo[i] = alpha[i] * uHaloGlow * blurSpan(p.x, r.x - e, r.z + e, s);
-      } else if (isPopup(uFade[i])) {
+      } else if (POPUP(i)) {
         float hs = min(s, 8.0);
         halo[i] = alpha[i] * uHaloGlow * bubbleEdge(p, r, 0.6 * hs, hs);
       } else {
@@ -310,7 +318,7 @@ void main() {
     if (i >= uCount) break;
     vec4 r = uRect[i];
     vec2 size = max(r.zw - r.xy, vec2(1.0)), d = p - r.xy;
-    bool popup = isPopup(uFade[i]);
+    bool popup = POPUP(i);
     float sd = popup ? bubble(p, r) : 0.0;
     float inRect = step(0.0, d.x) * step(0.0, d.y) * step(d.x, size.x) * step(d.y, size.y);
     float hg = halo[i] * (popup ? 1.0 : uStackGlow);
@@ -429,11 +437,11 @@ void main() {
     return;
   }
 #endif
-  if (uDither > 0.0) g = mix(g, quantize(g, threshold(cell)), uDither);
-  vec3 color = uMapOn > 0.5 ? texture2D(uRamp, vec2((g * 255.0 + 0.5) / 256.0, 0.5)).rgb : vec3(g);
-  if (uMapOn > 0.5) {
+  if (DITHER_ON) g = mix(g, quantize(g, threshold(cell)), uDither);
+  vec3 color = MAP_ON ? texture2D(uRamp, vec2((g * 255.0 + 0.5) / 256.0, 0.5)).rgb : vec3(g);
+  if (MAP_ON) {
     float tint = clamp(box * uInsetMix, 0.0, 1.0);
-    if (uDither > 0.0) tint = mix(tint, step(threshold(cell), tint - 0.001), uDither);
+    if (DITHER_ON) tint = mix(tint, step(threshold(cell), tint - 0.001), uDither);
     tint *= 1.0 - clamp(ink, 0.0, 1.0);
     if (tint > 0.0) color = mix(color, texture2D(uRamp, vec2((uInsetTone * 255.0 + 0.5) / 256.0, 0.5)).rgb, tint);
     color = mix(color, uInkColor, ink * uInkOverride);
@@ -445,6 +453,16 @@ void main() {
 #endif
 }`;
 
+  const GENERIC_DEFINES = `
+#define POPUP(i) isPopup(uFade[i])
+#define DITHER_ON (uDither > 0.0)
+#define MAP_ON (uMapOn > 0.5)`;
+  const PATTERNS = ['bayer2(cell)', 'bayer4(cell)', 'bayer8(cell)', 'fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453)', 'mod(cell.y, 4.0) / 4.0', 'mod(cell.x + cell.y, 4.0) / 4.0'];
+  const specDefines = (spec) => `
+#define POPUP(i) ${spec.popups ? 'isPopup(uFade[i])' : 'false'}
+#define DITHER_ON ${spec.dither}
+#define MAP_ON ${spec.map}
+#define PATTERN ${PATTERNS[spec.pattern]}`;
   const MAIN_UNIFORMS = ['uSize', 'uScale', 'uPixel', 'uRect', 'uArea', 'uCount', 'uFeather', 'uBlur', 'uHaloSize',
     'uHaloGlow', 'uStackGlow', 'uOverlay', 'uBg', 'uInk', 'uMapOn',
     'uInkColor', 'uInkOverride', 'uAlpha', 'uFade', 'uSpread', 'uNoiseScale', 'uPortalReach', 'uPortalBlur', 'uTail', 'uDither', 'uDitherLevels', 'uDitherScale', 'uDitherSpread', 'uDitherPattern', 'uModel', 'uModelShadow', 'uShadowGray', 'uShadowStrength', 'uModelRect', 'uInset', 'uInsetWin', 'uInsetCount', 'uInsetBlur', 'uInsetMix', 'uInsetInkMix', 'uInsetTone', 'uInsetInkTone', 'uModelWin', 'uModelPacked', 'uModelPanel', 'uModelLevels', 'uImageLevels', 'uImageRange', 'uRamp', 'uText', 'uTextSoft', 'uMedia', 'uMediaSoft', 'uSurface', 'uLiquidSize', 'uRefract', 'uLight', 'uLife', 'uLifeState', 'uLifeGrid', 'uLifeAlpha', 'uLifeFade', 'uCacheA', 'uCacheB', 'uCanvas'];
@@ -491,14 +509,21 @@ void main() {
     return { program, uniform };
   }
 
-  function buildMain(count) {
+  const sessionSpec = (wins) => ({
+    popups: wins.some((win) => win.hasAttribute('data-popup')),
+    dither: Math.fround(settings.dither) > 0,
+    map: stage.dataset.map !== 'off',
+    pattern: settings.ditherPattern,
+  });
+  function buildMain(count, spec = null) {
     let capacity = 4;
     while (capacity < count && capacity < maxCapacity) capacity *= 2;
     capacity = Math.min(capacity, maxCapacity);
-    if (main?.capacity === capacity) return;
+    const key = JSON.stringify(spec);
+    if (main?.capacity === capacity && main.key === key) return;
     let next;
     try {
-      next = { ...compile(MAIN(capacity), MAIN_UNIFORMS), capacity };
+      next = { ...compile(MAIN(capacity, 0, spec), MAIN_UNIFORMS), capacity, key };
     } catch (err) {
       if (!main) throw err;
       console.warn('keeping fewer window slots:', err);
@@ -512,7 +537,7 @@ void main() {
     for (const [name, unit] of Object.entries(UNITS)) gl.uniform1i(main.uniform[name], unit);
     if (!drawBuffers) return;
     try {
-      main.cache = compile(MAIN(capacity, 1), MAIN_UNIFORMS);
+      main.cache = compile(MAIN(capacity, 1, spec), MAIN_UNIFORMS);
       gl.useProgram(main.cache.program);
       for (const [name, unit] of Object.entries(UNITS)) gl.uniform1i(main.cache.uniform[name], unit);
     } catch (err) {
@@ -618,11 +643,11 @@ void main() {
       stillWater = newTexture(1, 1, new Uint8Array([128, 128, 128, 255]));
       liquid = null;
       main = null;
-      buildMain(1);
       rampTex = null;
       atlas = null;
       atlasDirty = true;
       readSettings();
+      buildMain(1, sessionSpec([...stage.children].filter((el) => el.classList.contains('win') && !el.hidden)));
       root.classList.add('gl');
       (window.requestIdleCallback ?? setTimeout)(warmUp, { timeout: 3000 });
       return true;
@@ -715,27 +740,46 @@ void main() {
     ctx.restore();
   }
 
-  function rasterize(win) {
-    const box = win.getBoundingClientRect();
-    const scale = devicePixelRatio;
-    const surface = () => {
-      const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(box.width * scale));
-      c.height = Math.max(1, Math.round(box.height * scale));
-      const ctx = c.getContext('2d');
-      ctx.setTransform(scale, 0, 0, scale, -box.left * scale, -box.top * scale);
-      return [c, ctx];
-    };
+  // each window's scrollable content is drawn into its own textures in content coordinates (as if scrolled to
+  // the top), a band of rows around what's showing. scrolling only changes which part gets copied into the
+  // window's spot in the atlas, so it never redraws text, and a change inside a window redraws just the rows it
+  // touched (see update). a raster entry has:
+  //   text, media: the band's textures; top, rows: which content rows (device px) they hold; cap: rows they fit
+  //   size: [w, h] of the whole content in device px; slot: [w, h] of the window
+  //   prints: where everything drawn sits (see prints); pending: elements changed since the last draw
+  //   later: rows still to draw when the page is idle; canvas, mediaCanvas: kept for drawing into
+  //   shown: the scroll offset last copied into the atlas; shift: how far ?lead moved it
+  const maxContentRows = () => Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), 8192);
+  // content textures get some room to grow, so a line more or less (last.fm, the log) doesn't mean a new texture
+  const capacityFor = (rows) => Math.min(maxContentRows(), Math.ceil((rows + 256) / 256) * 256);
 
-    const [text, ctx] = surface();
+  // css px of the content's top left corner, in viewport coordinates
+  const originOf = (win, box) => ({ x: box.left - win.scrollLeft, y: box.top - win.scrollTop });
+
+  // letter spacing is set every time too: left over from whichever text came last, it moved list markers
+  function setFont(ctx, cs) {
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    if ('letterSpacing' in ctx) ctx.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+  }
+
+  // draws the window into ctx (already transformed from viewport css px to its pixels), skipping things
+  // that don't touch `near` (viewport css px, top and bottom)
+  function paint(win, ctx, mctx, near) {
+    const touches = (r) => r.bottom >= near[0] && r.top <= near[1];
     ctx.fillStyle = '#f00';
     const range = document.createRange();
     const walker = document.createTreeWalker(win, NodeFilter.SHOW_TEXT);
+    let parent = null, parentNear = false;
     for (let node; (node = walker.nextNode());) {
+      if (!node.textContent.trim()) continue;
+      if (node.parentElement !== parent) {
+        parent = node.parentElement;
+        parentNear = touches(parent.getBoundingClientRect());
+      }
+      if (!parentNear) continue;
       const cs = getComputedStyle(node.parentElement);
-      if (cs.visibility === 'hidden' || !node.textContent.trim()) continue;
-      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-      if ('letterSpacing' in ctx) ctx.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+      if (cs.visibility === 'hidden') continue;
+      setFont(ctx, cs);
       const ascent = ctx.measureText('Hg').fontBoundingBoxAscent;
       const shown = (t) => cs.textTransform === 'uppercase' ? t.toUpperCase()
         : cs.textTransform === 'lowercase' ? t.toLowerCase()
@@ -767,6 +811,7 @@ void main() {
     for (const li of win.querySelectorAll('li')) {
       const cs = getComputedStyle(li), list = li.parentElement;
       if (cs.display !== 'list-item' || cs.listStyleType === 'none' || cs.visibility === 'hidden') continue;
+      if (!touches(li.getBoundingClientRect())) continue;
       const index = [...list.children].filter((c) => c.tagName === 'LI').indexOf(li);
       const marker = list.tagName === 'OL' ? `${(list.start || 1) + index}.` : '•';
       const firstText = document.createTreeWalker(li, NodeFilter.SHOW_TEXT, {
@@ -776,7 +821,7 @@ void main() {
       range.selectNodeContents(firstText);
       const line = range.getClientRects()[0];
       if (!line) continue;
-      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      setFont(ctx, cs);
       const ascent = ctx.measureText('Hg').fontBoundingBoxAscent;
       const x = li.getBoundingClientRect().left - parseFloat(cs.fontSize) * 0.4 - ctx.measureText(marker).width;
       ctx.fillText(marker, x, line.top + ascent);
@@ -785,6 +830,7 @@ void main() {
     if (win.hasAttribute('data-fading')) {
       for (const area of win.querySelectorAll('textarea')) {
         const r = area.getBoundingClientRect(), cs = getComputedStyle(area);
+        if (!touches(r)) continue;
         const size = parseFloat(cs.fontSize), lineHeight = parseFloat(cs.lineHeight) || size * 1.6;
         const [top, right, , left] = ['Top', 'Right', 'Bottom', 'Left'].map((side) => parseFloat(cs[`padding${side}`]));
         ctx.save();
@@ -793,7 +839,7 @@ void main() {
         ctx.fillStyle = 'rgba(255, 0, 0, 0.08)';
         ctx.fill();
         ctx.clip();
-        ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        setFont(ctx, cs);
         ctx.fillStyle = area.value ? '#f00' : 'rgba(255, 0, 0, 0.45)';
         const ascent = ctx.measureText('Hg').fontBoundingBoxAscent;
         const width = r.width - left - right;
@@ -820,7 +866,7 @@ void main() {
     const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
     for (const hr of win.querySelectorAll('hr')) {
       const r = hr.getBoundingClientRect();
-      if (!r.width) continue;
+      if (!r.width || !touches(r)) continue;
       const y = Math.round(r.top + r.height / 2) - 1;
       for (let row = 0; row < 2; row++) {
         for (let i = row, x = r.left + row; x < r.right; i += 2, x += 2) {
@@ -832,7 +878,7 @@ void main() {
 
     for (const svg of win.querySelectorAll('svg.icon')) {
       const r = svg.getBoundingClientRect();
-      if (!r.width) continue;
+      if (!r.width || !touches(r)) continue;
       const box = svg.viewBox.baseVal;
       ctx.save();
       ctx.translate(r.left, r.top);
@@ -844,7 +890,7 @@ void main() {
 
     for (const svg of win.querySelectorAll('button svg')) {
       const r = svg.getBoundingClientRect();
-      if (!r.width) continue;
+      if (!r.width || !touches(r)) continue;
       const k = r.width / svg.viewBox.baseVal.width;
       ctx.save();
       ctx.translate(r.left, r.top);
@@ -854,33 +900,344 @@ void main() {
       ctx.restore();
     }
 
-    let media = null;
-    const images = [...win.querySelectorAll('img')].filter((img) => img.complete && img.naturalWidth);
-    if (images.length) {
-      const [c, mctx] = surface();
-      images.forEach((img) => drawImage(mctx, img));
-      try {
-        mctx.getImageData(0, 0, 1, 1);
-        media = c;
-      } catch {
-        console.warn('Skipping cross-origin images in a window; they would block WebGL.', win);
-      }
+    if (mctx) for (const img of images(win)) if (touches(img.getBoundingClientRect())) drawImage(mctx, img);
+  }
+  const images = (win) => [...win.querySelectorAll('img')].filter((img) => img.complete && img.naturalWidth);
+
+  // from the texture-path change: a 1px probe once per picture, instead of reading back the whole media canvas
+  // on every draw, which stalled on the gpu each time
+  const cleanImages = new WeakMap();
+  function originClean(img) {
+    if (cleanImages.get(img) === img.currentSrc) return true;
+    const probe = document.createElement('canvas');
+    probe.width = probe.height = 1;
+    const ctx = probe.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, 1, 1);
+    try {
+      ctx.getImageData(0, 0, 1, 1);
+    } catch {
+      return false;
     }
-    rasters.set(win, { text, media });
+    cleanImages.set(img, img.currentSrc);
+    return true;
+  }
+
+  // where each drawn thing sits, in content css px. comparing two of these finds what moved
+  function prints(win, origin) {
+    const out = new Map();
+    const add = (el) => {
+      if (out.has(el)) return;
+      const r = el.getBoundingClientRect();
+      out.set(el, [r.left - origin.x, r.top - origin.y, r.right - origin.x, r.bottom - origin.y]);
+    };
+    const walker = document.createTreeWalker(win, NodeFilter.SHOW_TEXT);
+    for (let node; (node = walker.nextNode());) if (node.textContent.trim()) add(node.parentElement);
+    win.querySelectorAll('li, hr, svg, img, textarea').forEach(add);
+    return out;
+  }
+
+  // cleared once up front: these are only ever written in parts, which firefox otherwise clears lazily, slowly
+  function blankTexture(w, h) {
+    gl.activeTexture(gl.TEXTURE0);
+    const tex = newTexture(w, h);
+    clearTexture(tex, [0, 0, 0, 0]);
+    return tex;
+  }
+
+  // draws content rows [y0, y1) (device px) into the window's textures, through canvases kept per window
+  // (a fresh canvas for every change cost more than the drawing in it)
+  function drawRows(win, entry, y0, y1) {
+    const box = win.getBoundingClientRect(), origin = originOf(win, box), scale = devicePixelRatio;
+    const [w] = entry.size, tall = Math.min(entry.cap, Math.ceil(entry.slot[1] * 1.25) + 8);
+    const pics = images(win);
+    // like before, a window with a cross-origin picture draws none of its pictures (they would block webgl)
+    const clean = pics.every(originClean);
+    if (!clean) console.warn('Skipping cross-origin images in a window; they would block WebGL.', win);
+    const withMedia = clean && (pics.length > 0 || !!entry.media);
+    const surface = (c) => {
+      if (c?.width !== w || c?.height !== tall) {
+        c = document.createElement('canvas');
+        [c.width, c.height] = [w, tall];
+      }
+      return c;
+    };
+    entry.canvas = surface(entry.canvas);
+    if (withMedia && !entry.media) {
+      entry.media = blankTexture(w, entry.cap);
+      atlasDirty = true;
+    }
+    for (let a = y0; a < y1; a += tall) {
+      const b = Math.min(y1, a + tall);
+      const start = (c) => {
+        const ctx = c.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, w, b - a);
+        ctx.setTransform(scale, 0, 0, scale, -origin.x * scale, -origin.y * scale - a);
+        return ctx;
+      };
+      const pad = 4, near = [origin.y + a / scale - pad, origin.y + b / scale + pad];
+      // rows without pictures are just cleared in the media texture, no canvas needed
+      const pictured = withMedia && pics.some((img) => { const r = img.getBoundingClientRect(); return r.bottom >= near[0] && r.top <= near[1]; });
+      if (pictured) entry.mediaCanvas = surface(entry.mediaCanvas);
+      paint(win, start(entry.canvas), pictured ? start(entry.mediaCanvas) : null, near);
+      upload(entry.text, entry.canvas, a - entry.top, b - a);
+      if (pictured) upload(entry.media, entry.mediaCanvas, a - entry.top, b - a);
+      else if (entry.media) clearRows(entry.media, w, a - entry.top, b - a);
+    }
+    // only rows inside what was last copied into the atlas need copying again
+    if (!entry.shown || (y1 > entry.shown[1] && y0 < entry.shown[1] + entry.slot[1])) entry.changed = true;
+  }
+
+  function clearRows(tex, w, y, rows) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targetOf(tex));
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(0, y, w, rows);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  // the canvas goes into a scratch texture whole (texImage2D from a canvas stays on the gpu in chromium, where
+  // texSubImage2D read it back), then its first `rows` rows are copied into place
+  let scratch = null;
+  function upload(tex, source, y, rows) {
+    gl.activeTexture(gl.TEXTURE0);
+    if (!scratch) scratch = newTexture(1, 1, null, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, scratch);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    dropTarget(scratch);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targetOf(scratch));
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, y, 0, 0, source.width, rows);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  function sizeOf(win, box = win.getBoundingClientRect()) {
+    const scale = devicePixelRatio;
+    const slot = [Math.max(1, Math.round(box.width * scale)), Math.max(1, Math.round(box.height * scale))];
+    const size = [
+      slot[0] + Math.max(0, Math.ceil((win.scrollWidth - win.clientWidth) * scale)),
+      slot[1] + Math.max(0, Math.ceil((win.scrollHeight - win.clientHeight) * scale) + 2),
+    ];
+    return { slot, size };
+  }
+
+  // the content rows the textures hold: what's showing and about a screen either side, as far as the content goes
+  function bandFor(win, entry) {
+    const h = entry.slot[1], rows = Math.min(entry.size[1], maxContentRows(), 3 * h);
+    const sy = Math.round(win.scrollTop * devicePixelRatio);
+    return [Math.max(0, Math.min(entry.size[1] - rows, Math.round(sy + h / 2 - rows / 2))), rows];
+  }
+
+  // moves the textures to hold rows [top, top + rows), keeping the rows old and new share.
+  // returns the rows still to draw
+  function reband(entry, top, rows) {
+    const [oldTop, oldEnd] = [entry.top, entry.top + entry.rows];
+    if (top === entry.top && rows <= entry.cap) {
+      entry.rows = rows;
+      return top + rows > oldEnd ? [[oldEnd, top + rows]] : [];
+    }
+    const cap = capacityFor(rows), width = entry.size[0];
+    const keep = [Math.max(top, oldTop), Math.min(top + rows, oldEnd)];
+    const swap = (tex) => {
+      if (!tex) return null;
+      const fresh = blankTexture(width, cap);
+      if (keep[1] > keep[0]) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, targetOf(tex));
+        gl.bindTexture(gl.TEXTURE_2D, fresh);
+        gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, keep[0] - top, 0, keep[0] - oldTop, width, keep[1] - keep[0]);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
+      dropTarget(tex);
+      gl.deleteTexture(tex);
+      return fresh;
+    };
+    entry.text = swap(entry.text);
+    entry.media = swap(entry.media);
+    [entry.top, entry.rows, entry.cap] = [top, rows, cap];
+    if (keep[1] <= keep[0]) return [[top, top + rows]];
+    return [[top, keep[0]], [keep[1], top + rows]].filter(([a, b]) => b > a);
+  }
+
+  // draws a window's content from scratch. a window that already has a raster keeps its place in the atlas
+  function rasterize(win) {
+    const old = rasters.get(win);
+    if (old) dropRaster(old);
+    const box = win.getBoundingClientRect();
+    const entry = Object.assign(old ?? {}, { ...sizeOf(win, box), media: null, pending: null, areas: false, shown: null });
+    [entry.top, entry.rows] = bandFor(win, entry);
+    entry.cap = capacityFor(entry.rows);
+    entry.text = blankTexture(entry.size[0], entry.cap);
+    entry.prints = prints(win, originOf(win, box));
+    rasters.set(win, entry);
+    entry.later = [];
+    drawSoon(win, entry, [[entry.top, entry.top + entry.rows]]);
     atlasDirty = true;
   }
 
-  function forget(win) {
-    if (rasters.delete(win)) atlasDirty = true;
+  function dropRaster(entry) {
+    for (const tex of [entry.text, entry.media]) if (tex) { dropTarget(tex); gl.deleteTexture(tex); }
   }
 
-  function blurred(src, width, height, sigma) {
-    const pass = (from, dir) => {
-      const out = newTexture(width, height);
+  // redraws only what a change touched: the changed elements, plus anything that moved since the last draw
+  function update(win, entry) {
+    const pending = entry.pending;
+    entry.pending = null;
+    const box = win.getBoundingClientRect(), origin = originOf(win, box), scale = devicePixelRatio;
+    const next = sizeOf(win, box);
+    if (next.slot[0] !== entry.slot[0] || next.size[0] !== entry.size[0]) return rasterize(win);
+    const areas = win.hasAttribute('data-fading') || entry.areas;
+    entry.areas = false;
+    const dirty = [];
+    const mark = (r) => { if (r && r[3] > r[1]) dirty.push([r[1], r[3]]); };
+    const now = prints(win, origin);
+    for (const [el, r] of entry.prints) {
+      const s = now.get(el);
+      if (!s || s.some((v, i) => Math.abs(v - r[i]) > 0.01)) { mark(r); mark(s); }
+    }
+    for (const [el, s] of now) if (!entry.prints.has(el)) mark(s);
+    for (const el of pending) {
+      if (!el.isConnected || !win.contains(el)) continue;
+      // a textarea is drawn by the page itself unless the window is fading
+      if (!areas && el.closest('textarea')) continue;
+      const r = el.getBoundingClientRect();
+      mark([r.left - origin.x, r.top - origin.y, r.right - origin.x, r.bottom - origin.y]);
+    }
+    entry.prints = now;
+    if (next.size[1] !== entry.size[1] || next.slot[1] !== entry.slot[1]) {
+      const grown = next.size[1] > entry.size[1];
+      if (grown) dirty.push([entry.size[1] / scale, next.size[1] / scale]);
+      const [top, rows] = bandFor(win, { ...entry, ...next });
+      for (const [a, b] of reband(entry, top, rows)) dirty.push([a / scale, b / scale]);
+      if (next.slot[1] !== entry.slot[1]) {
+        // a resized window goes to the end of the atlas, where it always went when it was redrawn from scratch
+        rasters.delete(win);
+        rasters.set(win, entry);
+        atlasDirty = true;
+      }
+      Object.assign(entry, next);
+    }
+    if (!dirty.length) return;
+    // merge into bands of whole device rows, a little wider than the changes for glyphs that overhang their box
+    const PAD = 3;
+    const bands = dirty
+      .map(([a, b]) => [Math.max(entry.top, Math.floor((a - PAD) * scale)), Math.min(entry.top + entry.rows, Math.ceil((b + PAD) * scale))])
+      .filter(([a, b]) => b > a)
+      .sort((p, q) => p[0] - q[0]);
+    const merged = [];
+    for (const band of bands) {
+      const last = merged.at(-1);
+      if (last && band[0] <= last[1] + 16) last[1] = Math.max(last[1], band[1]);
+      else merged.push(band);
+    }
+    drawSoon(win, entry, merged);
+  }
+
+  function forget(win) {
+    const entry = rasters.get(win);
+    if (!entry) return;
+    dropRaster(entry);
+    rasters.delete(win);
+    atlasDirty = true;
+  }
+
+  // something inside a window changed: redraw that part on the next frame
+  function touch(win, ...els) {
+    const entry = rasters.get(win);
+    if (!entry) return;
+    entry.pending ??= new Set();
+    for (const el of els) entry.pending.add(el);
+  }
+
+  // before drawing: a raster for every window, up to date, holding the rows that are scrolled into view
+  function prepare(win) {
+    const entry = rasters.get(win);
+    if (!entry) return rasterize(win);
+    if (entry.pending) update(win, entry);
+    if (!rasters.has(win)) return;
+    // slide the band along before the view reaches its edge
+    const h = entry.slot[1], sy = Math.min(Math.round(win.scrollTop * devicePixelRatio), entry.size[1] - h);
+    const end = entry.top + entry.rows;
+    if ((entry.top > 0 && sy - entry.top < h / 2) || (end < entry.size[1] && end - sy - h < h / 2)) {
+      const [top, rows] = bandFor(win, entry);
+      if (top !== entry.top || rows !== entry.rows) drawSoon(win, entry, reband(entry, top, rows));
+    }
+    if (entry.later.length) {
+      // rows put off for later that have come near: draw them now
+      const later = entry.later;
+      entry.later = [];
+      drawSoon(win, entry, later);
+    }
+  }
+
+  // content rows that are showing (and a little either side, for ?lead) are drawn right away. the rest wait for an
+  // idle moment or until they scroll near, so opening a long window or a change near its top costs one window's worth
+  const nearRows = (win, entry) => {
+    const h = entry.slot[1], sy = Math.max(0, Math.min(entry.size[1] - h, Math.round(win.scrollTop * devicePixelRatio)));
+    const margin = Math.ceil(h / 8);
+    return [sy - margin, sy + h + margin];
+  };
+  function drawSoon(win, entry, bands) {
+    const near = nearRows(win, entry);
+    for (let [a, b] of bands) {
+      [a, b] = [Math.max(a, entry.top), Math.min(b, entry.top + entry.rows)];
+      if (b <= a) continue;
+      const [c, d] = [Math.max(a, near[0]), Math.min(b, near[1])];
+      if (d > c) drawRows(win, entry, c, d);
+      if (a < Math.min(b, near[0])) entry.later.push([a, Math.min(b, near[0])]);
+      if (Math.max(a, near[1]) < b) entry.later.push([Math.max(a, near[1]), b]);
+    }
+    if (entry.later.length) whenIdle();
+  }
+  let idleQueued = false;
+  function whenIdle() {
+    if (idleQueued) return;
+    idleQueued = true;
+    const CHUNK = 768;
+    const work = (deadline) => {
+      idleQueued = false;
+      if (!gl || gl.isContextLost()) return;
+      // without requestIdleCallback (safari), one chunk per turn
+      let chunks = 1;
+      const time = () => (deadline ? deadline.timeRemaining() : chunks-- > 0 ? 8 : 0);
+      for (const [win, entry] of rasters) {
+        while (entry.later.length && time() > 4) {
+          const [a, b] = entry.later.shift();
+          if (b - a > CHUNK) entry.later.unshift([a + CHUNK, b]);
+          drawRows(win, entry, a, Math.min(b, a + CHUNK));
+        }
+        if (entry.later.length) return whenIdle();
+      }
+    };
+    if (window.requestIdleCallback) requestIdleCallback(work, { timeout: 1000 });
+    else setTimeout(work, 50);
+  }
+
+  const targets = new Map();
+  function targetOf(tex) {
+    if (!targets.has(tex)) {
       const fb = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, out, 0);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      targets.set(tex, fb);
+    }
+    return targets.get(tex);
+  }
+  function dropTarget(tex) {
+    if (targets.has(tex)) gl.deleteFramebuffer(targets.get(tex));
+    targets.delete(tex);
+  }
+
+  // the same separable blur as before, only redone inside `area` (x, y, w, h in texture rows) of the atlas
+  function blurArea(src, mid, dst, width, height, sigma, area) {
+    const pass = (from, to, dir) => {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, targetOf(to));
       gl.viewport(0, 0, width, height);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(...area);
       gl.useProgram(blurProgram.program);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, from);
@@ -889,25 +1246,29 @@ void main() {
       gl.uniform2f(blurProgram.uniform.uDir, ...dir);
       gl.uniform1f(blurProgram.uniform.uSigma, sigma);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.deleteFramebuffer(fb);
-      return out;
     };
-    const across = pass(src, [1, 0]);
-    const result = pass(across, [0, 1]);
-    gl.deleteTexture(across);
-    return result;
+    pass(src, mid, [1, 0]);
+    pass(mid, dst, [0, 1]);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
+  // the atlas holds every window's visible part, packed in rows, with room around each for the blur.
+  // its layout only changes when windows come, go or change size
   function buildAtlas() {
-    if (atlas) for (const tex of new Set([atlas.text, atlas.textSoft, atlas.media, atlas.mediaSoft])) gl.deleteTexture(tex);
+    if (atlas) {
+      for (const tex of new Set([atlas.text, atlas.textSoft, atlas.media, atlas.mediaSoft, atlas.mid])) {
+        dropTarget(tex);
+        gl.deleteTexture(tex);
+      }
+    }
     const limit = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), 4096);
     const sigma = settings.blur * devicePixelRatio;
     const pad = Math.ceil(3 * sigma) + 1;
     const spots = [];
     let x = 0, y = 0, rowHeight = 0, width = 1;
     for (const [win, r] of rasters) {
-      const [w, h] = [r.text.width + 2 * pad, r.text.height + 2 * pad];
+      const [w, h] = [r.slot[0] + 2 * pad, r.slot[1] + 2 * pad];
       if (w > limit) continue;
       if (x + w > limit) [x, y, rowHeight] = [0, y + rowHeight, 0];
       if (y + h > limit) break;
@@ -917,32 +1278,92 @@ void main() {
       width = Math.max(width, x);
     }
     const height = Math.max(1, y + rowHeight);
-    const sheet = () => {
-      const c = document.createElement('canvas');
-      [c.width, c.height] = [width, height];
-      return [c, c.getContext('2d')];
-    };
-    const [textSheet, textCtx] = sheet();
     const hasMedia = spots.some(([, r]) => r.media);
-    const [mediaSheet, mediaCtx] = hasMedia ? sheet() : [null, null];
-    const areas = new Map();
-    for (const [win, r, left, top] of spots) {
-      textCtx.drawImage(r.text, left, top);
-      if (r.media) mediaCtx.drawImage(r.media, left, top);
-      areas.set(win, [left / width, top / height, (left + r.text.width) / width, (top + r.text.height) / height]);
-    }
-    const text = newTexture(width, height, textSheet);
-    const media = hasMedia ? newTexture(width, height, mediaSheet) : newTexture(1, 1, new Uint8Array(4));
     const soft = sigma >= 0.5;
+    gl.activeTexture(gl.TEXTURE0);
+    const text = blankTexture(width, height);
+    const media = hasMedia ? blankTexture(width, height) : newTexture(1, 1, new Uint8Array(4));
+    const slots = new Map(), areas = new Map();
+    for (const [win, r, left, top] of spots) {
+      slots.set(win, [left, top, r.slot[0], r.slot[1]]);
+      areas.set(win, [left / width, top / height, (left + r.slot[0]) / width, (top + r.slot[1]) / height]);
+      r.shown = null;
+    }
     atlas = {
+      width, height, pad, sigma, hasMedia, slots, areas,
       text,
-      textSoft: soft ? blurred(text, width, height, sigma) : text,
+      textSoft: soft ? blankTexture(width, height) : text,
       media,
-      mediaSoft: soft && hasMedia ? blurred(media, width, height, sigma) : media,
-      areas,
+      mediaSoft: soft && hasMedia ? blankTexture(width, height) : media,
+      mid: soft ? blankTexture(width, height) : null,
       blur: settings.blur,
     };
     atlasDirty = false;
+  }
+
+  // lead: chromium scrolls a window on its own thread and shows the new position a frame before this code hears
+  // of it, so the gl picture trails by a frame. with lead, a window that's moving is drawn where it will be by
+  // the time the frame shows: one more frame at its current speed, slowing as it slows. it costs a one-frame
+  // overshoot when a scroll stops dead. on by default in chromium only (navigator.userAgentData); webkit and
+  // firefox already keep up, and lead made webkit run ahead. ?lead forces it on, ?nolead off
+  const params = new URLSearchParams(location.search);
+  const LEAD = !params.has('nolead') && (params.has('lead') || !!navigator.userAgentData);
+  const motion = new WeakMap();
+  function track(win, now) {
+    if (!LEAD) return;
+    const was = motion.get(win), top = win.scrollTop;
+    const v = was && now - was.t < 1.5 * (was.dt || 17) ? top - was.top : 0;
+    const ratio = was?.v ? Math.max(0, Math.min(1, v / was.v)) : 1;
+    const lead = v * ratio;
+    motion.set(win, { top, t: now, dt: was ? now - was.t : 0, v, lead });
+    if (lead) {
+      // look again next frame, to settle if it stopped
+      const s = stage.getBoundingClientRect(), r = win.getBoundingClientRect();
+      requestRender({ x0: r.left - s.left, y0: r.top - s.top, x1: r.right - s.left, y1: r.bottom - s.top });
+    }
+  }
+  const leadOf = (win) => (LEAD ? motion.get(win)?.lead ?? 0 : 0);
+  const shiftOf = (win) => rasters.get(win)?.shift ?? 0;
+
+  // copies the part of a window's content that's scrolled into view into its atlas spot, and blurs it there
+  function show(win) {
+    const entry = rasters.get(win), slot = atlas.slots.get(win);
+    if (!entry || !slot) return;
+    const scale = devicePixelRatio;
+    const [w, h] = entry.slot;
+    const sx = Math.max(0, Math.min(entry.size[0] - w, Math.round(win.scrollLeft * scale)));
+    const at = Math.round(win.scrollTop * scale);
+    const sy = Math.max(entry.top, Math.min(entry.size[1] - h, entry.top + entry.rows - h, Math.round((win.scrollTop + leadOf(win)) * scale)));
+    // what the lead moved the content by, so things the shader places from the page (boxes, her) move with it
+    entry.shift = (sy - Math.max(0, Math.min(entry.size[1] - h, at))) / scale;
+    if (!entry.changed && entry.shown?.[0] === sx && entry.shown?.[1] === sy) return;
+    const copy = (from, to) => {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, targetOf(from));
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, to);
+      gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, slot[0], slot[1], sx, sy - entry.top, w, h);
+    };
+    copy(entry.text, atlas.text);
+    if (atlas.hasMedia) {
+      if (entry.media) copy(entry.media, atlas.media);
+      else {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, targetOf(atlas.media));
+        gl.enable(gl.SCISSOR_TEST);
+        gl.scissor(slot[0], slot[1], w, h);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.disable(gl.SCISSOR_TEST);
+      }
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (atlas.mid) {
+      const { pad } = atlas;
+      const area = [slot[0] - pad, slot[1] - pad, w + 2 * pad, h + 2 * pad];
+      blurArea(atlas.text, atlas.mid, atlas.textSoft, atlas.width, atlas.height, atlas.sigma, area);
+      if (atlas.hasMedia) blurArea(atlas.media, atlas.mid, atlas.mediaSoft, atlas.width, atlas.height, atlas.sigma, area);
+    }
+    entry.shown = [sx, sy];
+    entry.changed = false;
   }
 
   const CELL = 4;
@@ -1043,11 +1464,28 @@ void main() {
     else { animating = false; dropLiquid(); requestComposite(); }
   }
 
-  stage.addEventListener('pointerdown', (e) => {
+  // a mouse ripples as it presses. a finger or pen ripples when it lifts, and only for a tap: a touch that turns
+  // into a scroll is cancelled by the browser (or moves too far) and never starts the water
+  const splash = (x, y) => {
     const box = stage.getBoundingClientRect();
-    if (splashes.length < 4) splashes.push([e.clientX - box.left, e.clientY - box.top]);
+    if (splashes.length < 4) splashes.push([x - box.left, y - box.top]);
     wake();
+  };
+  const presses = new Map();
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') splash(e.clientX, e.clientY);
+    else presses.set(e.pointerId, [e.clientX, e.clientY]);
   });
+  stage.addEventListener('pointermove', (e) => {
+    const at = presses.get(e.pointerId);
+    if (at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) > 10) presses.delete(e.pointerId);
+  });
+  stage.addEventListener('pointerup', (e) => {
+    const at = presses.get(e.pointerId);
+    presses.delete(e.pointerId);
+    if (at) splash(...at);
+  });
+  stage.addEventListener('pointercancel', (e) => presses.delete(e.pointerId));
 
   // easter egg: three quick clicks or taps on the background turn its dither dots into conway's game of life,
   // and three more turn it back. windows keep their own dithering; the game runs on under them too.
@@ -1188,11 +1626,13 @@ void main() {
     if (!region && !seed) queued = null;
     const box = stage.getBoundingClientRect();
     const wins = [...stage.children].filter((el) => el.classList.contains('win') && !el.hidden);
-    buildMain(wins.length);
+    buildMain(wins.length, sessionSpec(wins));
     const drawn = wins.slice(0, main.capacity);
     const isColumn = (win) => win.dataset.shape === 'column';
-    for (const win of drawn) if (!rasters.has(win) && !isColumn(win)) rasterize(win);
+    for (const win of drawn) if (!isColumn(win)) prepare(win);
     if (atlasDirty || atlas.blur !== settings.blur) buildAtlas();
+    const now = performance.now();
+    for (const win of drawn) if (!isColumn(win)) { track(win, now); show(win); }
 
     const scale = pixelScale(), U = unit();
     const [w, h] = [Math.round(box.width * scale), Math.round(box.height * scale)];
@@ -1267,19 +1707,20 @@ void main() {
       gl.uniform1f(u.uDitherSpread, Number.isNaN(settings.ditherSpread) ? 1 : settings.ditherSpread);
       gl.uniform1f(u.uDitherPattern, settings.ditherPattern);
       const modelWin = model.tex && model.spot ? drawn.indexOf(model.spot.closest('.win')) : -1;
-      const mr = model.spot?.getBoundingClientRect();
-      gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top, mr.right - box.left, mr.bottom - box.top].map((v) => v / U) : [0, 0, 0, 0]));
+      const mr = model.spot?.getBoundingClientRect(), ms = model.spot ? shiftOf(model.spot.closest('.win')) : 0;
+      gl.uniform4f(u.uModelRect, ...(mr ? [mr.left - box.left, mr.top - box.top - ms, mr.right - box.left, mr.bottom - box.top - ms].map((v) => v / U) : [0, 0, 0, 0]));
       gl.uniform1f(u.uModelWin, modelWin);
       gl.uniform1f(u.uModelPacked, model.panel ? 1 : 0);
       gl.uniform3f(u.uModelPanel, ...(model.panel ?? [1, 0, 0]));
       const insets = new Float32Array(32), insetWins = new Float32Array(8);
       let insetCount = 0;
       drawn.forEach((win, i) => {
+        const shift = shiftOf(win);
         for (const sect of win.querySelectorAll('.sect')) {
           if (insetCount >= 8) break;
           const q = sect.getBoundingClientRect();
           if (!q.width) continue;
-          insets.set([q.left - box.left, q.top - box.top, q.right - box.left, q.bottom - box.top], insetCount * 4);
+          insets.set([q.left - box.left, q.top - box.top - shift, q.right - box.left, q.bottom - box.top - shift], insetCount * 4);
           insetWins[insetCount++] = i;
         }
       });
@@ -1356,36 +1797,74 @@ void main() {
   const resizes = new ResizeObserver((entries) => {
     for (const { target } of entries) {
       if (target === stage) [...rasters.keys()].forEach(forget);
-      else forget(target);
+      else if (rasters.has(target)) {
+        // a hidden window lets go of its raster. otherwise it's redrawn from scratch if its width changed,
+        // and only what moved if not
+        const width = Math.round(target.getBoundingClientRect().width * devicePixelRatio);
+        if (target.hidden || width !== rasters.get(target).slot[0]) forget(target);
+        else touch(target);
+      }
     }
     requestRender();
   });
   new MutationObserver((records) => {
+    // from the texture-path change: an attribute that ends the batch with the value it started with changed
+    // nothing (message.js sets the textarea's height to auto and straight back on every keystroke). while a
+    // window fades its textarea's value is drawn too, and typing doesn't mutate the dom, so those still count then
+    const started = new Map();
     for (const record of records) {
+      if (record.type !== 'attributes') continue;
+      if (!started.has(record.target)) started.set(record.target, new Map());
+      const first = started.get(record.target);
+      if (!first.has(record.attributeName)) first.set(record.attributeName, record.oldValue);
+    }
+    const unchanged = (record) => record.type === 'attributes'
+      && started.get(record.target)?.get(record.attributeName) === record.target.getAttribute(record.attributeName)
+      && !record.target.closest('.win')?.hasAttribute('data-fading');
+    let changed = false;
+    for (const record of records) {
+      if (unchanged(record)) continue;
+      changed = true;
       for (const node of record.addedNodes) if (node.classList?.contains('win')) resizes.observe(node);
       for (const node of record.removedNodes) if (node.classList?.contains('win') && !node.isConnected) forget(node);
       const el = record.target.nodeType === 1 ? record.target : record.target.parentElement;
       const win = el?.closest('.win');
-      if (win && (!(record.type === 'attributes' && el === win) || record.attributeName === 'data-fading')) forget(win);
+      if (!win) continue;
+      if (record.type === 'attributes' && el === win) {
+        // a window's own style is where it is and how faded, which the shader reads each frame.
+        // while it fades its text boxes are drawn into the raster instead of by the page
+        if (record.attributeName === 'data-fading' && rasters.has(win)) {
+          rasters.get(win).areas = true;
+          touch(win, ...win.querySelectorAll('textarea'));
+        }
+        continue;
+      }
+      touch(win, el);
     }
-    requestRender();
+    if (changed) requestRender();
   }).observe(stage, {
-    subtree: true, childList: true, characterData: true,
+    subtree: true, childList: true, characterData: true, attributeOldValue: true,
     attributes: true, attributeFilter: ['style', 'hidden', 'class', 'src', 'data-map', 'data-tail', 'data-fading'],
   });
+  // scrolling a window only moves which part of its raster is copied into the atlas, read when drawing.
+  // only the window's own box can change
   stage.addEventListener('scroll', (e) => {
     const win = e.target.closest?.('.win');
-    if (win) { forget(win); requestRender(); }
+    if (!win) return;
+    if (e.target !== win) { touch(win, e.target); return requestRender(); }
+    const s = stage.getBoundingClientRect(), r = win.getBoundingClientRect();
+    requestRender({ x0: r.left - s.left, y0: r.top - s.top, x1: r.right - s.left, y1: r.bottom - s.top });
   }, true);
   stage.addEventListener('load', (e) => {
     const win = e.target.closest?.('.win');
-    if (win) { forget(win); requestRender(); }
+    if (win) { touch(win, e.target); requestRender(); }
   }, true);
   document.fonts?.ready.then(() => { [...rasters.keys()].forEach(forget); requestRender(); });
   // her pixels only reach her box, so a new frame of her redraws just that
   const modelBox = () => {
     const s = stage.getBoundingClientRect(), r = model.spot.getBoundingClientRect();
-    return { x0: r.left - s.left, y0: r.top - s.top, x1: r.right - s.left, y1: r.bottom - s.top };
+    const shift = shiftOf(model.spot.closest('.win'));
+    return { x0: r.left - s.left, y0: r.top - s.top - shift, x1: r.right - s.left, y1: r.bottom - s.top - shift };
   };
   addEventListener('model:frame', (e) => {
     if (!gl) return;
@@ -1433,6 +1912,8 @@ void main() {
   });
   canvas.addEventListener('webglcontextrestored', () => {
     rasters.clear();
+    targets.clear();
+    scratch = null;
     if (init()) render();
   });
 

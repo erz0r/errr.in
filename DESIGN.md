@@ -161,8 +161,21 @@ in a 256-color ramp made from the palette.
   the other side. if the page has (almost) no live cells, at the start or later, it gets a few
   patches of random soup. 15 generations a second, on a torus. it fades in and out across the whole
   page through the same noise and sweep as a window's fade, over twice the window fade time.
-- clicking drops a ripple that spreads across the page. it is turned off for reduced
-  motion.
+- clicking drops a ripple that spreads across the page. a mouse ripples as it presses; a finger
+  or pen ripples when it lifts, and only if the touch didn't turn into a scroll. it is turned off
+  for reduced motion.
+- each window's content is rasterized once into a band of rows around what's showing (about a
+  screen either side), in content coordinates. scrolling copies the visible rows into the
+  window's atlas slot on the gpu and re-blurs only that slot, so it never redraws text. a
+  change redraws only the rows that changed or moved; typing in a textarea redraws nothing
+  unless the window is fading. rows off screen are drawn when the page is idle.
+- the main shader is compiled with the dither pattern, whether dithering and the gradient map
+  are on, and whether a popup is showing baked in, and rebuilt when those change.
+- lead: chromium scrolls a window a frame before the page hears about it, so there the gl
+  picture is drawn where a moving window will be one frame later, which keeps it level with the
+  text (a frame of overshoot when a scroll stops dead). it's on in chromium only, detected by
+  `navigator.userAgentData`; webkit and firefox already keep up. `?lead` forces it on and
+  `?nolead` off.
 - while ripples or the game of life run, the windows, glows, boxes and text are drawn once
   into two cache textures, and each ripple or game frame only bends, tones and dithers that
   cache. the gray is kept as `a * life + b` so the game's tone can still go under everything.
