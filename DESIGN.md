@@ -162,13 +162,17 @@ in a 256-color ramp made from the palette.
   patches of random soup. 15 generations a second, on a torus. it fades in and out across the whole
   page through the same noise and sweep as a window's fade, over twice the window fade time.
 - clicking drops a ripple that spreads across the page. a mouse ripples as it presses; a finger
-  or pen ripples when it lifts, and only if the touch didn't turn into a scroll. it is turned off
+  or pen ripples when it lifts, and only if the touch didn't turn into a scroll (or landed in a
+  text box). it is turned off
   for reduced motion.
 - each window's content is rasterized once into a band of rows around what's showing (about a
   screen either side), in content coordinates. scrolling copies the visible rows into the
   window's atlas slot on the gpu and re-blurs only that slot, so it never redraws text. a
-  change redraws only the rows that changed or moved; typing in a textarea redraws nothing
-  unless the window is fading. rows off screen are drawn when the page is idle.
+  change redraws only the rows that changed or moved. rows off screen are drawn when the page
+  is idle.
+- text boxes (the message boxes) are drawn by the renderer too, box, text and placeholder, so
+  they scroll and ripple with everything else. the page only draws the caret and selection.
+  typing and focus redraw the box's rows. pressing into a text box doesn't ripple.
 - the main shader is compiled with the dither pattern, whether dithering and the gradient map
   are on, and whether a popup is showing baked in, and rebuilt when those change.
 - lead: chromium scrolls a window a frame before the page hears about it, so there the gl

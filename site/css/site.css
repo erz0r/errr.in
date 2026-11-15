@@ -115,6 +115,9 @@ html:has(body:not(.writeup)), body:not(.writeup) { height: 100%; overflow: hidde
 }
 .message-box textarea::placeholder { color: color-mix(in srgb, var(--map-ink) 45%, transparent); }
 .message-box textarea:focus { background: color-mix(in srgb, var(--map-ink) 12%, transparent); }
+/* with webgl the renderer draws the text boxes (so they scroll with everything else); the page keeps the caret */
+.gl .message-box textarea { color: transparent; background: transparent; }
+.gl .message-box textarea::placeholder { color: transparent; }
 .win[data-fading] .message-box textarea { color: transparent; background: transparent; caret-color: transparent; }
 .win[data-fading] .message-box textarea::placeholder { color: transparent; }
 .llms { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; pointer-events: none; }

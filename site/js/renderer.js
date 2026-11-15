@@ -827,7 +827,9 @@ void main() {
       ctx.fillText(marker, x, line.top + ascent);
     }
 
-    if (win.hasAttribute('data-fading')) {
+    // text boxes are drawn here rather than by the page, so they scroll with everything else; the page only
+    // draws the caret (and selection)
+    {
       for (const area of win.querySelectorAll('textarea')) {
         const r = area.getBoundingClientRect(), cs = getComputedStyle(area);
         if (!touches(r)) continue;
@@ -836,14 +838,15 @@ void main() {
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(r.left, r.top, r.width, r.height, parseFloat(cs.borderTopLeftRadius) || 0);
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.08)';
+        ctx.fillStyle = `rgba(255, 0, 0, ${area === document.activeElement ? 0.12 : 0.08})`;
         ctx.fill();
         ctx.clip();
         setFont(ctx, cs);
         ctx.fillStyle = area.value ? '#f00' : 'rgba(255, 0, 0, 0.45)';
-        const ascent = ctx.measureText('Hg').fontBoundingBoxAscent;
+        const { fontBoundingBoxAscent: ascent, fontBoundingBoxDescent: descent } = ctx.measureText('Hg');
         const width = r.width - left - right;
-        let y = r.top + top - area.scrollTop + (lineHeight - size) / 2;
+        // lines sit like the browser sets them: the font's ascent and descent centred in the line height
+        let y = r.top + top - area.scrollTop + (lineHeight - ascent - descent) / 2;
         for (const paragraph of (area.value || area.placeholder).split('\n')) {
           let line = '';
           for (const word of paragraph.split(' ')) {
@@ -1067,7 +1070,7 @@ void main() {
     const old = rasters.get(win);
     if (old) dropRaster(old);
     const box = win.getBoundingClientRect();
-    const entry = Object.assign(old ?? {}, { ...sizeOf(win, box), media: null, pending: null, areas: false, shown: null });
+    const entry = Object.assign(old ?? {}, { ...sizeOf(win, box), media: null, pending: null, shown: null });
     [entry.top, entry.rows] = bandFor(win, entry);
     entry.cap = capacityFor(entry.rows);
     entry.text = blankTexture(entry.size[0], entry.cap);
@@ -1089,8 +1092,6 @@ void main() {
     const box = win.getBoundingClientRect(), origin = originOf(win, box), scale = devicePixelRatio;
     const next = sizeOf(win, box);
     if (next.slot[0] !== entry.slot[0] || next.size[0] !== entry.size[0]) return rasterize(win);
-    const areas = win.hasAttribute('data-fading') || entry.areas;
-    entry.areas = false;
     const dirty = [];
     const mark = (r) => { if (r && r[3] > r[1]) dirty.push([r[1], r[3]]); };
     const now = prints(win, origin);
@@ -1101,8 +1102,6 @@ void main() {
     for (const [el, s] of now) if (!entry.prints.has(el)) mark(s);
     for (const el of pending) {
       if (!el.isConnected || !win.contains(el)) continue;
-      // a textarea is drawn by the page itself unless the window is fading
-      if (!areas && el.closest('textarea')) continue;
       const r = el.getBoundingClientRect();
       mark([r.left - origin.x, r.top - origin.y, r.right - origin.x, r.bottom - origin.y]);
     }
@@ -1465,7 +1464,8 @@ void main() {
   }
 
   // a mouse ripples as it presses. a finger or pen ripples when it lifts, and only for a tap: a touch that turns
-  // into a scroll is cancelled by the browser (or moves too far) and never starts the water
+  // into a scroll is cancelled by the browser (or moves too far) and never starts the water. pressing into a
+  // text box doesn't ripple, so what you type isn't wobbling
   const splash = (x, y) => {
     const box = stage.getBoundingClientRect();
     if (splashes.length < 4) splashes.push([x - box.left, y - box.top]);
@@ -1473,6 +1473,7 @@ void main() {
   };
   const presses = new Map();
   stage.addEventListener('pointerdown', (e) => {
+    if (e.target.closest?.('textarea')) return;
     if (e.pointerType === 'mouse') splash(e.clientX, e.clientY);
     else presses.set(e.pointerId, [e.clientX, e.clientY]);
   });
@@ -1808,9 +1809,8 @@ void main() {
     requestRender();
   });
   new MutationObserver((records) => {
-    // from the texture-path change: an attribute that ends the batch with the value it started with changed
-    // nothing (message.js sets the textarea's height to auto and straight back on every keystroke). while a
-    // window fades its textarea's value is drawn too, and typing doesn't mutate the dom, so those still count then
+    // an attribute that ends the batch with the value it started with changed nothing (message.js sets the
+    // textarea's height to auto and straight back on every keystroke; the typing itself arrives as input events)
     const started = new Map();
     for (const record of records) {
       if (record.type !== 'attributes') continue;
@@ -1819,8 +1819,7 @@ void main() {
       if (!first.has(record.attributeName)) first.set(record.attributeName, record.oldValue);
     }
     const unchanged = (record) => record.type === 'attributes'
-      && started.get(record.target)?.get(record.attributeName) === record.target.getAttribute(record.attributeName)
-      && !record.target.closest('.win')?.hasAttribute('data-fading');
+      && started.get(record.target)?.get(record.attributeName) === record.target.getAttribute(record.attributeName);
     let changed = false;
     for (const record of records) {
       if (unchanged(record)) continue;
@@ -1831,12 +1830,7 @@ void main() {
       const win = el?.closest('.win');
       if (!win) continue;
       if (record.type === 'attributes' && el === win) {
-        // a window's own style is where it is and how faded, which the shader reads each frame.
-        // while it fades its text boxes are drawn into the raster instead of by the page
-        if (record.attributeName === 'data-fading' && rasters.has(win)) {
-          rasters.get(win).areas = true;
-          touch(win, ...win.querySelectorAll('textarea'));
-        }
+        // a window's own style is where it is and how faded, which the shader reads each frame
         continue;
       }
       touch(win, el);
@@ -1844,7 +1838,7 @@ void main() {
     if (changed) requestRender();
   }).observe(stage, {
     subtree: true, childList: true, characterData: true, attributeOldValue: true,
-    attributes: true, attributeFilter: ['style', 'hidden', 'class', 'src', 'data-map', 'data-tail', 'data-fading'],
+    attributes: true, attributeFilter: ['style', 'hidden', 'class', 'src', 'placeholder', 'data-map', 'data-tail', 'data-fading'],
   });
   // scrolling a window only moves which part of its raster is copied into the atlas, read when drawing.
   // only the window's own box can change
@@ -1855,6 +1849,12 @@ void main() {
     const s = stage.getBoundingClientRect(), r = win.getBoundingClientRect();
     requestRender({ x0: r.left - s.left, y0: r.top - s.top, x1: r.right - s.left, y1: r.bottom - s.top });
   }, true);
+  // typing and focus change how a text box looks without touching the dom
+  const boxChanged = (e) => {
+    const win = e.target.closest?.('.win');
+    if (win && e.target.tagName === 'TEXTAREA') { touch(win, e.target); requestRender(); }
+  };
+  for (const type of ['input', 'focusin', 'focusout']) stage.addEventListener(type, boxChanged, true);
   stage.addEventListener('load', (e) => {
     const win = e.target.closest?.('.win');
     if (win) { touch(win, e.target); requestRender(); }
