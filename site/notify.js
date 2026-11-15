@@ -10,7 +10,7 @@ self.addEventListener('push', (e) => e.waitUntil((async () => {
       .sort((a, b) => b.time.localeCompare(a.time))[0];
     if (latest) body = latest.text.length > 160 ? `${latest.text.slice(0, 159)}…` : latest.text;
   } catch {}
-  await self.registration.showNotification('erin replied ♡', { body, tag: 'errr.in-reply', icon: '/apple-touch-icon.png', data: { url: '/#about' } });
+  await self.registration.showNotification('erin replied ♡', { body, tag: 'errr.in-reply', icon: '/apple-touch-icon.png', data: { url: '/#messages' } });
 })()));
 
 self.addEventListener('notificationclick', (e) => {
@@ -18,8 +18,8 @@ self.addEventListener('notificationclick', (e) => {
   e.waitUntil((async () => {
     const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const page = open.find((c) => new URL(c.url).origin === self.location.origin);
-    if (!page) return self.clients.openWindow('/#about');
+    if (!page) return self.clients.openWindow('/#messages');
     await page.focus();
-    page.postMessage({ open: 'about' });
+    page.postMessage({ open: 'messages' });
   })());
 });

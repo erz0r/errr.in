@@ -57,12 +57,14 @@ const MESSAGE_BOX = '<div class="message"><form class="message-box message-new" 
   + '<button type="submit" aria-label="send"><svg viewBox="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5"/></svg></button>'
   + '</div><input class="trap" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">'
   + '<p class="message-status" role="status"></p></form>'
-  + '<div class="message-inbox" hidden><p class="message-links">'
-  + '<button type="button" class="message-toggle" aria-expanded="false">see your messages and replies</button>'
-  + '<button type="button" class="message-notify" hidden></button></p>'
-  + '<div class="message-convos" hidden></div></div></div>';
+  + '<p class="message-links" hidden><a class="message-open" href="#messages">see your messages and replies</a></p></div>';
+// the messages window: this browser's conversations, filled in by message.js
+const MESSAGES = '<div class="messages"><p class="message-links"><button type="button" class="message-notify" hidden></button></p>'
+  + '<p class="messages-empty">nothing here yet. what you send from <a href="#about">about</a> shows up here, along with erin\'s replies.</p>'
+  + '<div class="message-convos"></div></div>';
 const withLog = (html) => html.replace(/<p>\{log\}<\/p>|\{log\}/g, '<div class="log" data-src="/api/log"></div>');
-const withMessageBox = (html) => html.replace(/<p>\{message-box\}<\/p>|\{message-box\}/g, MESSAGE_BOX);
+const withMessageBox = (html) => html.replace(/<p>\{message-box\}<\/p>|\{message-box\}/g, MESSAGE_BOX)
+  .replace(/<p>\{messages\}<\/p>|\{messages\}/g, MESSAGES);
 
 const fileVersion = (path) => createHash('sha256').update(readFileSync(join(SITE, path))).digest('hex').slice(0, 8);
 

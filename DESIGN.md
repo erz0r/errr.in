@@ -119,15 +119,18 @@ other things you can write:
   up on the page within a second. the dev server shows the live log, or the entries in
   `dev/log-sample.json` when it can't reach it.
 - message box: `{message-box}` is a text box with a send arrow. enter sends. it sits in its own
-  box on the about page. once a browser has sent something, "see your messages and replies"
-  shows up under the box. it opens that browser's conversations, newest first: each message
-  it started, erin's answers, and a "say more.." box to keep talking. it opens by itself when
-  there's an answer the browser hasn't seen (remembered in localStorage), and checks for new
-  answers every 30 seconds while the box is showing. "ping me when erin replies" turns on
-  browser notifications through a small service worker (`site/notify.js`), where the browser
-  supports push (on iphones, only from a home screen web app). the conversations belong to
-  the browser, through an http-only cookie the page itself can't read, so clearing cookies
-  loses them. the dev server answers every message with a pretend reply after 5 seconds.
+  box on the about page. once a browser has sent something, a "see your messages and replies"
+  link shows up under the box (with "· new reply ♡" when there's an answer that browser hasn't
+  seen in the messages window, remembered in localStorage). it opens the messages window.
+- messages window: `content/windows/messages.md`, at `/#messages`. `{messages}` shows this
+  browser's conversations, newest first: each message it started, erin's answers, and a
+  "say more.." box to keep talking. with none it says "nothing here yet". it checks for new
+  answers every 30 seconds while it or the about window is showing. "ping me when erin
+  replies" turns on browser notifications through a small service worker (`site/notify.js`),
+  where the browser supports push (on iphones, only from a home screen web app); tapping one
+  opens this window. the conversations belong to the browser, through an http-only cookie the
+  page itself can't read, so clearing cookies loses them. the dev server answers every message
+  with a pretend reply after 5 seconds.
 - last.fm: `{lastfm:erarnard}` shows what that account is playing, or what it last
   played and when. it updates every minute while the page is open. it needs a last.fm api
   key in a file called `lastfm.key` (git ignores it). without the key, nothing shows.
