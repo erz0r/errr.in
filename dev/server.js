@@ -131,6 +131,11 @@ data: ${JSON.stringify(JSON.parse(await readFile(resolve('dev/log-sample.json'),
       } catch {}
       return res.end();
     }
+    if (url.pathname === '/log.xml') {
+      const live = await fetch('https://errr.in/log.xml', { signal: AbortSignal.timeout(5000) }).catch(() => null);
+      if (live?.ok) return send(200, await live.text(), 'application/rss+xml; charset=utf-8');
+      return send(404, 'the feed comes from the log bot; the dev server can only pass on the live one');
+    }
     if (url.pathname === '/api/log' || url.pathname.startsWith('/api/log/media/')) {
       const live = await fetch(`https://errr.in${url.pathname}`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
       const type = live?.ok ? live.headers.get('content-type') ?? '' : '';

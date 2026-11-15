@@ -306,8 +306,10 @@ exposed directly and cloudflare handles https.
 - log: a third container, `errrin-log` (`deploy/log.mjs`, no dependencies), is a discord bot.
   it keeps a gateway connection open and, whenever a message in the log channel is posted,
   edited or deleted, reads the channel again and keeps erin's 15 newest posts. pictures are
-  saved to `~/errr.in-log/media`. it serves `/api/log`, the pictures, and `/api/log/stream`,
-  which pushes the log to open pages (server-sent events, at most 4 per visitor). it also
+  saved to `~/errr.in-log/media`. it serves `/api/log`, the pictures, `/log.xml` (the same posts
+  as an rss feed, which every page links in its head so feed readers find it from errr.in), and
+  `/api/log/stream`, which pushes the log to open pages (server-sent events, at most 4 per
+  visitor). it also
   rereads the channel every minute in case the connection drops. the bot token, channel id and
   erin's user id live in `~/docker/errrin/log.env` on momoka, never in the repo. the bot needs
   the message content intent and read access to that channel.

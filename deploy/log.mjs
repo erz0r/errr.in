@@ -127,12 +127,50 @@ createServer((req, res) => answer(req, res).catch(() => {
   res.end();
 })).listen(8080);
 
+// the same posts as an rss feed, for feed readers (/log.xml)
+const SITE = 'https://errr.in';
+const xml = (text) => String(text).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
+function rss() {
+  const { updated, entries } = JSON.parse(feed);
+  const items = entries.map((entry) => {
+    const first = entry.text.split('\n')[0];
+    const title = !first ? (entry.images.length > 1 ? 'pictures' : 'a picture') : first.length > 80 ? `${first.slice(0, 79)}…` : first;
+    const body = [
+      ...(entry.text ? [`<p>${xml(entry.text).replace(/\n/g, '<br>')}</p>`] : []),
+      ...entry.images.map((image) => `<p><img src="${SITE}${image.src}" alt=""${image.width ? ` width="${image.width}" height="${image.height}"` : ''}></p>`),
+    ].join('');
+    return `    <item>
+      <title>${xml(title)}</title>
+      <link>${SITE}/#about</link>
+      <guid isPermaLink="false">errr.in-log-${entry.id}</guid>
+      <pubDate>${new Date(entry.time).toUTCString()}</pubDate>
+      <description>${xml(body)}</description>
+    </item>`;
+  });
+  return `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>erin's log</title>
+    <link>${SITE}/#about</link>
+    <atom:link href="${SITE}/log.xml" rel="self" type="application/rss+xml"/>
+    <description>short posts from erin, the log on errr.in</description>
+    <language>en</language>
+${updated ? `    <lastBuildDate>${new Date(updated).toUTCString()}</lastBuildDate>\n` : ''}${items.join('\n')}
+  </channel>
+</rss>
+`;
+}
+
 async function answer(req, res) {
   const url = new URL(req.url, 'http://log');
   if (req.method !== 'GET' && req.method !== 'HEAD') return res.writeHead(405).end();
   if (url.pathname === '/api/log') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
     return res.end(req.method === 'HEAD' ? undefined : feed);
+  }
+  if (url.pathname === '/log.xml') {
+    res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=300' });
+    return res.end(req.method === 'HEAD' ? undefined : rss());
   }
   if (url.pathname === '/api/log/stream') {
     const who = String(req.headers['cf-connecting-ip'] ?? req.socket.remoteAddress);
